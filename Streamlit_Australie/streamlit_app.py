@@ -5,10 +5,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
+# Charger les données
 # __file__ pointe vers streamlit_app.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(BASE_DIR, "data_2024-25.csv")
-df = pd.read_csv(DATA_PATH)
+df = pd.read_csv(os.path.join(BASE_DIR, "weatherAUS.csv"))
+X_test =  pd.read_csv(os.path.join(BASE_DIR, "data_2024-25.csv")) 
 
 st.title("Projet de classification binaire sur la pluie en Australie")
 st.sidebar.title("Sommaire")
