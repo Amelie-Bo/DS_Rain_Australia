@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
 # __file__ pointe vers streamlit_app.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
