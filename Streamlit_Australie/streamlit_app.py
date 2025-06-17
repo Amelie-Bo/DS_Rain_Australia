@@ -37,42 +37,6 @@ if page == pages[1] :
   sns.heatmap(df.corr(), ax=ax)
   st.write(fig)
   
-  from src_py.visualization import map_rainfall_by_station
-    
-    @st.cache_data
-    def load_my_data():
-        # Exemple de chargement ; à adapter
-        df = pd.read_csv("data/mon_dataset.csv")
-        # … tout pré-traitement nécessaire …
-        return df
-    
-    @st.cache_data
-    def load_localisations():
-        # Exemple : charger vos coords depuis un JSON ou CSV
-        # Ici on hardcode juste un dict
-        return {
-          "Station A": (-33.86, 151.21),
-          "Station B": (-37.81, 144.96),
-          # …
-        }
-    
-    def main():
-        st.title("Carte des précipitations moyennes")
-    
-        df = load_my_data()
-        localisations = load_localisations()
-    
-        st.write("Aperçu des données :", df.head())
-    
-        # On récupère la figure depuis notre module
-        fig = map_rainfall_by_station(df, localisations)
-    
-        # On l'affiche avec Streamlit
-        st.plotly_chart(fig, use_container_width=True)
-    
-    if __name__ == "__main__":
-        main()
-
 if page == pages[2] : 
   st.write("### Modélisation")# sur X_test
 
