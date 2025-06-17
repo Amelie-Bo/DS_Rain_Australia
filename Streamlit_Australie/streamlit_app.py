@@ -1,4 +1,4 @@
-# Contenu de strealit_app.py (code à copier dans un fichier.py et à mettre sur github à la fin)
+# Contenu de strealit_app.py 
 import streamlit as st
 import pandas as pd
 import numpy as np
