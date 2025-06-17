@@ -9,7 +9,7 @@ import os
 # Charger les données
 
 df = pd.read_csv("weatherAUS.csv")
-X_test =  pd.read_csv("data_2024-25.csv")
+#X_test = pd.read_csv("data_2024-25.csv")
 
 st.title("Projet de classification binaire sur la pluie en Australie")
 st.sidebar.title("Sommaire")
