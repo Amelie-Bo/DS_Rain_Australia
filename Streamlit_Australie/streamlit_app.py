@@ -1,15 +1,21 @@
-# Contenu de strealit_app.py 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+import os 
 
 # Charger les données
-
 df = pd.read_csv("weatherAUS.csv")
-X_test =  pd.read_csv("data_2024-25.csv")
+# Load X_test with error handling
+try:
+    X_test = pd.read_csv("data_2024-25.csv")
+    st.success("data_2024-25.csv loaded successfully!")
+except FileNotFoundError:
+    st.error("Error: data_2024-25.csv not found. Please ensure the file is in the correct directory.")
+except Exception as e:
+    st.error(f"An error occurred while loading data_2024-25.csv: {e}")
+
 
 st.title("Projet de classification binaire sur la pluie en Australie")
 st.sidebar.title("Sommaire")
@@ -41,7 +47,13 @@ if page == pages[2] :
   st.write("### Modélisation")# sur X_test preprocesse ou non?(mon preprocessing + modelisationprend qq minutes )
 
   # Supprimer les variables inutiles
-  X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
+  # Check if X_test is loaded before attempting to drop columns
+  if 'X_test' in locals():
+      X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
+      st.write("Dropped 'Evaporation' and 'Sunshine' from X_test")
+  else:
+      st.warning("X_test was not loaded, cannot drop columns.")
+
 
 if page == pages[3] :
   st.write("### Evaluation") #
