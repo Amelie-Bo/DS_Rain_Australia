@@ -4,18 +4,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+#Pour debug
+st.write("Répertoire courant :", os.getcwd())
+st.write("Contenu du dossier :", os.listdir("."))
 
 # 1. Charger les données
 df = pd.read_csv("weatherAUS.csv")
 
 # Load X_test with error handling
 try:
-    df_new_data = pd.read_csv("data_2024-25.csv") #Essayer 2024_25 pour voir si ok
-    st.success("data_2024-25.csv loaded successfully!")
+    df_new_data = pd.read_csv("data_2024_25.csv") #Essayer 2024_25 pour voir si ok
+    st.success("data_2024_25.csv loaded successfully!")
 except FileNotFoundError:
-    st.error("Error: data_2024-25.csv not found. Please ensure the file is in the correct directory._")
+    st.error("Error: data_2024_25.csv not found. Please ensure the file is in the correct directory._")
 except Exception as e:
-    st.error(f"An error occurred while loading data_2024-25.csv: {e}")
+    st.error(f"An error occurred while loading data_2024_25.csv: {e}")
 
 # 2. Définir la structure   
 st.title("Projet de classification binaire sur la pluie en Australie")
@@ -51,7 +54,7 @@ if page == pages[2] :
   st.write("### Modélisation")# sur X_test preprocesse ou non?(mon preprocessing + modelisationprend qq minutes )
 
   # Supprimer les variables inutiles
-  X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
+  df_new_data = df_new_data.drop(['Evaporation', 'Sunshine'], axis=1)
 
 if page == pages[3] :
   st.write("### Evaluation") #
