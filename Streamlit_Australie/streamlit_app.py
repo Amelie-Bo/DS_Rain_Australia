@@ -3,26 +3,28 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os 
+import os
 
-# Charger les données
+# 1. Charger les données
 df = pd.read_csv("weatherAUS.csv")
+
 # Load X_test with error handling
 try:
-    df_new_data = pd.read_csv("data_2024-25.csv")
+    df_new_data = pd.read_csv("data_2024-25.csv") #Essayer 2024_25 pour voir si ok
     st.success("data_2024-25.csv loaded successfully!")
 except FileNotFoundError:
-    st.error("Error: data_2024-25.csv not found. Please ensure the file is in the correct directory.")
+    st.error("Error: data_2024-25.csv not found. Please ensure the file is in the correct directory._")
 except Exception as e:
     st.error(f"An error occurred while loading data_2024-25.csv: {e}")
 
-
+# 2. Définir la structure   
 st.title("Projet de classification binaire sur la pluie en Australie")
 st.sidebar.title("Sommaire")
 pages=["Exploration", "DataVizualization", "Modélisation","Evaluation"]
 page=st.sidebar.radio("Aller vers", pages)
 
-if page == pages[0] : #Sur la page Exploration
+# 3. Sur la page Exploration 
+if page == pages[0] : 
   st.write("### Introduction")
   st.dataframe(df.head(10))
   st.write(df.shape) #equivalent de print
@@ -31,9 +33,10 @@ if page == pages[0] : #Sur la page Exploration
   if st.checkbox("Afficher les NA") : #quand on coche la case, on affiche la méthode ci-dessous
     st.dataframe(df.isna().sum())
 
-
+# 3. Sur la page Datavizualisation 
+#Sur le fichier source? sur le nouveau jeu de données?
 if page == pages[1] :
-  st.write("### DataVizualization") #Sur le fichier source? sur le nouveau jeu de données?
+  st.write("### DataVizualization") 
   #Afficher un graphique de la variable cible "Pluie demain"
   fig = plt.figure()
   sns.countplot(x = 'RainTomorrow', data = df)
@@ -43,17 +46,12 @@ if page == pages[1] :
   sns.heatmap(df.corr(), ax=ax)
   st.write(fig)
 
+# 4. Sur la page Modélisation 
 if page == pages[2] :
   st.write("### Modélisation")# sur X_test preprocesse ou non?(mon preprocessing + modelisationprend qq minutes )
 
   # Supprimer les variables inutiles
-  # Check if X_test is loaded before attempting to drop columns
-  if 'X_test' in locals():
-      df_new_data = df_new_data.drop(['Evaporation', 'Sunshine'], axis=1)
-      st.write("Dropped 'Evaporation' and 'Sunshine' from X_test")
-  else:
-      st.warning("X_test was not loaded, cannot drop columns.")
-
+  X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
 
 if page == pages[3] :
   st.write("### Evaluation") #
