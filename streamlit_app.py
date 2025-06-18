@@ -38,6 +38,7 @@ from dateutil.relativedelta import relativedelta
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 1. Charger les données
 df = pd.read_csv("data/weatherAUS.csv")
+liste_colonne_df = df.columns #servira à ordonner les colonnes dans les données actuelles
 X_test = pd.read_csv("data/data_2024-25.csv")
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 2. Définir la structure
@@ -150,7 +151,7 @@ if page == pages[4] :
   # 1.2 Saisie utilisateur
   st.subheader("Sélection ")
   
-  liste_mois = st.selectbox("Sélectionnez un mois", liste_mois_a_selectionner)
+  liste_mois = st.multiselect("Sélectionnez un ou plusieurs mois", liste_mois_a_selectionner)
 
   ## 1.2.1 Afficher le nom des stations dans la liste déroulante
   # Multiselect avec affichage du nom de la station
@@ -176,18 +177,13 @@ if page == pages[4] :
           url_concatene = ("http://www.bom.gov.au/climate/dwo/"+str(le_annee_mois)+"/text/"+no_report+"."+le_annee_mois+".csv") # Exemple : http://www.bom.gov.au/climate/dwo/202412/text/IDCJDW2804.202412.csv
           i+= 1
           # Essayer de télécharger le fichier avec des en-têtes de type navigateur
-          headers = {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
-          }
-
+          headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
           # Effectuer la requête
-          response = requests.get(url_concatene, headers=headers)
-
+          response = requests.get(url_concatene, headers=headers) 
           # Vérifier si la requête est réussie
           if response.status_code == 200:
               # Utiliser StringIO pour lire le texte CSV dans un DataFrame
               csv_data = StringIO(response.text)
-              
               # L'entete n'est a=pas toujours sur la meme ligne : On lit le fichier ligne par ligne pour trouver le header qui commence par ,"Date", 
               lines = response.text.splitlines()
               # Trouver la ligne où "Date" apparaît pour la première fois
@@ -196,28 +192,22 @@ if page == pages[4] :
                   if "Date" in line:
                       header_row = i
                       break
-              
-              df_recupere = pd.read_csv(csv_data, sep=",", skiprows=header_row, encoding="latin1")
-              st.dataframe(df_recupere.head(10)) #Ne s'affiche pas?
-              
+              df_recupere = pd.read_csv(csv_data, sep=",", skiprows=header_row, encoding="latin1")              
               #Faire un df consolidé par station
               if i == 1 :
                   df_une_station = df_une_station
               else :
                   df_une_station = pd.concat([df_une_station, df_recupere], ignore_index=True) 
-          
           else:
-              st.write("Erreur lors du chargement de l'URL pour {} de {} : {}".format(le_annee_mois, dico_stations_DWO[no_report][2], response.status_code))
+              st.write("Erreur lors du chargement de l'URL pour {} de {} : {} - URL: {}".format(le_annee_mois, dico_stations_DWO[no_report][2], response.status_code,url_concatene))
       
-      #Mettre les noms de colonnes du df principal
-      df_une_station = df_une_station.rename(nom_colonnes_df_principal, axis = 1) 
-      st.dataframe(df_une_station.head(10)) #temp
-      #Suppression de colonnes
-      df_une_station = df_une_station.drop(["Unnamed: 0","Time of maximum wind gust"],axis =1)
+      
+      df_une_station = df_une_station.rename(nom_colonnes_df_principal, axis = 1) #Mettre les noms de colonnes du df principal      
+      df_une_station = df_une_station.drop(["Unnamed: 0","Time of maximum wind gust"],axis =1) #Suppression de colonnes
 
       #Ajout de colonnes
       #Insérer en 2e position (loc=1) le nom de la station (3e colonne du dico) associé à ce rapport dans le dictionnaire dico_stations_DWO
-      df_une_station.insert(1,column="Location", value=dico_stations_DWO[no_report][2]) 
+      df_une_station.insert(1,column="Location", value=dico_stations_DWO[no_report][2]) # 
 
       df_une_station["RainToday"]=df_une_station["Rainfall"].apply(lambda x: "Yes" if x>1 else "No")
       #Met les valeurs de RainToday à l'indice précédent dans RainTomorrow 
@@ -227,8 +217,7 @@ if page == pages[4] :
       df_une_station.drop(df_une_station.index[-1], inplace=True)
 
       #Mettre les colonnes dans le même ordre que le df de départ du projet
-      df_reference=pd.read_csv("weatherAUS.csv",parse_dates=["Date"])
-      df_une_station = df_une_station[df_reference.columns]
+      df_une_station = df_une_station[liste_colonne_df]
 
 
       #Faire un df consolidé (df_conso_station) des df unitaire par station (df_une_station)
@@ -236,11 +225,17 @@ if page == pages[4] :
           df_conso_station = df_une_station
       else :
           df_conso_station = pd.concat([df_conso_station, df_une_station], ignore_index=True) 
-  X_test = df_conso_station
-
+  
+  # Modification de la vitesse "Calm" par 0km/h
+  df_conso_station["WindSpeed9am"] = df_conso_station["WindSpeed9am"].apply(lambda x: 0 if x =="Calm" else x)
+  df_conso_station["WindSpeed3pm"] = df_conso_station["WindSpeed3pm"].apply(lambda x: 0 if x =="Calm" else x)
+  df_conso_station["WindGustSpeed"] = df_conso_station["WindGustSpeed"].apply(lambda x: 0 if x =="Calm" else x)
+  
   # 1.4 Preprocessing de base
+  X_test = df_conso_station
   st.dataframe(X_test.head(10))
-
+  # Traitement de 99
+ 
   # 2.1 Sélectionner un jour
 
   # 2.2 reste du preprocessing (Date supprimée) ##stop ici
