@@ -120,11 +120,8 @@ if page == pages[4] :
   liste_mois_a_selectionner = [(mois_depart - relativedelta(months=i)).strftime("%Y%m") for i in reversed(range(13))]
   
   ##1.1.2 Dico stations
-  #with open("dico scaler/dico_station.pkl", "wb") as fichier:
-  #  pickle.dump(dico_stations_updated, fichier)
-  dico_stations_DWO_a_selectionner = {
-    "IDCJDW5001": ('Adelaide Airport', '023034', 'Adelaide', 'Note 1', 23, 'South Australia'),
-    "IDCJDW6002": ('Albany', '009999', 'Albany', 'Note 1', 9, 'Western Australia'),} 
+  with open("dico_scaler/dico_station_geo.pkl", "rb") as fichier:
+    dico_charge = pickle.load(fichier)
 
   ##1.1.3 Noms des colonnes dans le df généré (futur X_test)
   nom_colonnes_df_principal = {"Minimum temperature (°C)" : "MinTemp", 
@@ -157,14 +154,18 @@ if page == pages[4] :
   # Multiselect avec affichage du nom de la station
   stations_selectionnees = st.multiselect(
       "Sélectionnez une ou plusieurs stations",
-      options=list(dico_stations_DWO_a_selectionner.keys()),
-      format_func=lambda x: dico_stations_DWO_a_selectionner[x][0])
+      options=list(dico_charge.keys()),
+      format_func=lambda x: dico_charge[x][0])
   # Générer un dictionnaire filtré identique en format à l’original
   dico_stations_DWO = {
-      k: dico_stations_DWO_a_selectionner[k]
+      k: dico_charge[k]
       for k in stations_selectionnees}
+  
+  # 1.2.2 Tant que l'utilisateur n'a pas fait de sélection complète (mois + location) ne pas aller plus loin
+  if not liste_mois or not dico_stations_DWO:
+      st.stop()
 
-  # 1.3 Code récupérant les csv et les conslidant dans le Df df_conso_station à partir d'une liste d'url
+  # 2 Code récupérant les csv et les conslidant dans le Df df_conso_station à partir d'une liste d'url
   compteur = 0 #pour consolider les df de station dans un un seul df : df_conso_station
   df_conso_station=pd.DataFrame()
 
@@ -201,7 +202,7 @@ if page == pages[4] :
           else:
               st.write("Erreur lors du chargement de l'URL pour {} de {} : {} - URL: {}".format(le_annee_mois, dico_stations_DWO[no_report][2], response.status_code,url_concatene))
       
-      
+    # 2.2 Mise en forme du csv collecté
       df_une_station = df_une_station.rename(nom_colonnes_df_principal, axis = 1) #Mettre les noms de colonnes du df principal      
       df_une_station = df_une_station.drop(["Unnamed: 0","Time of maximum wind gust"],axis =1) #Suppression de colonnes
 
@@ -226,18 +227,50 @@ if page == pages[4] :
       else :
           df_conso_station = pd.concat([df_conso_station, df_une_station], ignore_index=True) 
   
-  # Modification de la vitesse "Calm" par 0km/h
-  df_conso_station["WindSpeed9am"] = df_conso_station["WindSpeed9am"].apply(lambda x: 0 if x =="Calm" else x)
-  df_conso_station["WindSpeed3pm"] = df_conso_station["WindSpeed3pm"].apply(lambda x: 0 if x =="Calm" else x)
-  df_conso_station["WindGustSpeed"] = df_conso_station["WindGustSpeed"].apply(lambda x: 0 if x =="Calm" else x)
-  
-  # 1.4 Preprocessing de base
-  X_test = df_conso_station
-  st.dataframe(X_test.head(10))
-  # Traitement de 99
+
+  #-2. Preprocessing de base---------------------------------------------------------------------------------------------------------------------------------
+  df_X_test = df_conso_station
+
+  ## 2.1 Modification de la vitesse "Calm" par 0km/h
+  df_X_test["WindSpeed9am"] = df_X_test["WindSpeed9am"].apply(lambda x: 0 if x =="Calm" else x)
+  df_X_test["WindSpeed3pm"] = df_X_test["WindSpeed3pm"].apply(lambda x: 0 if x =="Calm" else x)
+  df_X_test["WindGustSpeed"] = df_X_test["WindGustSpeed"].apply(lambda x: 0 if x =="Calm" else x)
+
+  ## 2.2 Suprresion 25% des NAN
+  total_cells_per_location = df_X_test.groupby("Location").size() * (df_X_test.shape[1] - 1)  # -1 pour exclure la colonne Location elle-même
+  nan_counts_per_location = df_X_test.drop(columns="Location").isna().groupby(df_X_test["Location"]).sum().sum(axis=1)
+  nan_ratio = nan_counts_per_location / total_cells_per_location
+  valid_locations = nan_ratio[nan_ratio <= 0.25].index
+  df_X_test = df_X_test[df_X_test["Location"].isin(valid_locations)]
  
-  # 2.1 Sélectionner un jour
+  ## 2.3 Ajout de la latitude et de la longitude
+  df_dico_station_geo = pd.DataFrame.from_dict(dico_charge, orient="index",columns=["Lat", "Lon"])
+  df_dico_station_geo.columns = ["Latitude", "Longitude"]
+  df_X_test = df_X_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
 
-  # 2.2 reste du preprocessing (Date supprimée) ##stop ici
+  ## 2.3 Date, Saison
+  df_X_test["Date"]=pd.to_datetime(df_X_test["Date"], format = "%Y-%m-%d")
+  df_X_test["Month"] = df_X_test['Date'].dt.month
+  df_X_test["Year"] = df_X_test['Date'].dt.year
+  df_X_test["Saison"] = df_X_test["Month"].apply( lambda x : "Eté" if x in [12, 1, 2] else "Automne" if x in [3, 4, 5] else "Hiver" if x in [6, 7, 8] else "Printemps")
+  
+  ## 2.4 Ajout du climat
+  climat_mapping = pd.read_csv("dico scaler\climat_mapping.csv", index_col="Location")
+  climat_mapping_series = climat_mapping.squeeze()  # Convertir en Series pour faciliter le mapping
+  df_X_test['Climat'] = df_X_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
-  # 3 Prediction 
+  ## 2.5 Suppression des features 
+  df_X_test = df_X_test.drop(["Sunshine","Evaporation"], axis = 1)
+
+  ## 2.6 Traitement de la variable cible : Suppression des NaN et Label Encoder
+  df_X_test = df_X_test.dropna(subset=["RainTomorrow"], axis=0, how="any")
+  encoder=LabelEncoder()
+  df_X_test["RainTomorrow"] = encoder.fit_transform(df_X_test["RainTomorrow"])  #N=0, Y=1
+
+  # 3 Sélectionner un jour (avant d'enlever Date)---------------------------------------------------------------------------------------------------------------------------------
+  st.dataframe(df_X_test.head(10))
+  # 4 Reste du preprocessing (Date supprimée) ##stop ici
+
+  # 5 Prédiction------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  # 6 Evaluation------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  # 7 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
