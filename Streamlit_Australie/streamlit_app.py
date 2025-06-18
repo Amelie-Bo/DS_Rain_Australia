@@ -11,11 +11,11 @@ df = pd.read_csv("weatherAUS.csv")
 # Load X_test with error handling
 try:
     df_new_data = pd.read_csv("data_2024_25.csv") #Essayer 2024_25 pour voir si ok
-    st.success("data_2024-25.csv loaded successfully!")
+    st.success("data_2024_25.csv loaded successfully!")
 except FileNotFoundError:
-    st.error("Error: data_2024-25.csv not found. Please ensure the file is in the correct directory._")
+    st.error("Error: data_2024_25.csv not found. Please ensure the file is in the correct directory._")
 except Exception as e:
-    st.error(f"An error occurred while loading data_2024-25.csv: {e}")
+    st.error(f"An error occurred while loading data_2024_25.csv: {e}")
 
 # 2. Définir la structure   
 st.title("Projet de classification binaire sur la pluie en Australie")
