@@ -1,10 +1,35 @@
 # Contenu de streamlit_app.py
+
+## Chargement des librairies
 import streamlit as st
+
 import pandas as pd
 import numpy as np
+from scipy.stats import randint
+
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
+
+from sklearn.preprocessing import LabelEncoder
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import (accuracy_score, f1_score, classification_report, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, 
+                             roc_curve, precision_recall_fscore_support, brier_score_loss)
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
+from sklearn.decomposition import PCA
+
+from imblearn.metrics import classification_report_imbalanced 
+import xgboost as xgb
+
+import pickle
+from joblib import load
+import cloudpickle
+
 import os
+
+import streamlit-shap
+from streamlit_shap import st_shap
+import shap
 
 # 1. Charger les données
 df = pd.read_csv("data/weatherAUS.csv")
