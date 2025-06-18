@@ -4,6 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+#Pour debug
+st.write("Répertoire courant :", os.getcwd())
+st.write("Contenu du dossier :", os.listdir("."))
 
 # 1. Charger les données
 df = pd.read_csv("weatherAUS.csv")
@@ -51,7 +54,7 @@ if page == pages[2] :
   st.write("### Modélisation")# sur X_test preprocesse ou non?(mon preprocessing + modelisationprend qq minutes )
 
   # Supprimer les variables inutiles
-  X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
+  df_new_data = df_new_data.drop(['Evaporation', 'Sunshine'], axis=1)
 
 if page == pages[3] :
   st.write("### Evaluation") #
