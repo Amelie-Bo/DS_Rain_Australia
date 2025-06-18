@@ -27,7 +27,7 @@ import cloudpickle
 
 import os
 
-import streamlit-shap
+import streamlit_shap
 from streamlit_shap import st_shap
 import shap
 
