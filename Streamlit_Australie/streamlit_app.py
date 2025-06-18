@@ -9,7 +9,7 @@ import os
 df = pd.read_csv("weatherAUS.csv")
 # Load X_test with error handling
 try:
-    X_test = pd.read_csv("data_2024-25.csv")
+    df_new_data = pd.read_csv("data_2024-25.csv")
     st.success("data_2024-25.csv loaded successfully!")
 except FileNotFoundError:
     st.error("Error: data_2024-25.csv not found. Please ensure the file is in the correct directory.")
@@ -49,7 +49,7 @@ if page == pages[2] :
   # Supprimer les variables inutiles
   # Check if X_test is loaded before attempting to drop columns
   if 'X_test' in locals():
-      X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
+      df_new_data = df_new_data.drop(['Evaporation', 'Sunshine'], axis=1)
       st.write("Dropped 'Evaporation' and 'Sunshine' from X_test")
   else:
       st.warning("X_test was not loaded, cannot drop columns.")
