@@ -247,21 +247,21 @@ if page == pages[5] :
 
 
   #-2. Preprocessing de base---------------------------------------------------------------------------------------------------------------------------------
-  df_X_test = df_conso_station
+  df_X_y_test = df_conso_station
 
   ## 2.1 Modification de la vitesse "Calm" par 0km/h
-  df_X_test["WindSpeed9am"] = df_X_test["WindSpeed9am"].apply(lambda x: 0 if x =="Calm" else x)
-  df_X_test["WindSpeed3pm"] = df_X_test["WindSpeed3pm"].apply(lambda x: 0 if x =="Calm" else x)
-  df_X_test["WindGustSpeed"] = df_X_test["WindGustSpeed"].apply(lambda x: 0 if x =="Calm" else x)
+  df_X_y_test["WindSpeed9am"] = df_X_y_test["WindSpeed9am"].apply(lambda x: 0 if x =="Calm" else x)
+  df_X_y_test["WindSpeed3pm"] = df_X_y_test["WindSpeed3pm"].apply(lambda x: 0 if x =="Calm" else x)
+  df_X_y_test["WindGustSpeed"] = df_X_y_test["WindGustSpeed"].apply(lambda x: 0 if x =="Calm" else x)
 
   ## 2.2 Suprresion 25% des NAN
   # === Calcul du ratio de NaN ===
-  total_cells_per_location = df_X_test.groupby("Location").size() * (df_X_test.shape[1] - 1)  # -1 car on exclut 'Location'
-  nan_counts_per_location = df_X_test.drop(columns="Location").isna().groupby(df_X_test["Location"]).sum().sum(axis=1)
+  total_cells_per_location = df_X_y_test.groupby("Location").size() * (df_X_y_test.shape[1] - 1)  # -1 car on exclut 'Location'
+  nan_counts_per_location = df_X_y_test.drop(columns="Location").isna().groupby(df_X_y_test["Location"]).sum().sum(axis=1)
   nan_ratio = nan_counts_per_location / total_cells_per_location
   # === Filtrage des stations valides ===
   valid_locations = nan_ratio[nan_ratio <= 0.25].index.to_list() #>>ex : {'BadgerysCreek', 'Albury'}
-  df_X_test = df_X_test[df_X_test["Location"].isin(valid_locations)]
+  df_X_y_test = df_X_y_test[df_X_y_test["Location"].isin(valid_locations)]
   
   # === Messages Streamlit ===
   # noms des stations selectionné par l'utilisateur
@@ -279,26 +279,26 @@ if page == pages[5] :
     dico_charge = pickle.load(fichier)
   df_dico_station_geo = pd.DataFrame.from_dict(dico_charge, orient="index",columns=["Lat", "Lon"])
   df_dico_station_geo.columns = ["Latitude", "Longitude"]
-  df_X_test = df_X_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
+  df_X_y_test = df_X_y_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
 
   ## 2.4 Date, Saison
-  df_X_test["Date"]=pd.to_datetime(df_X_test["Date"], format = "%Y-%m-%d")
-  df_X_test["Month"] = df_X_test['Date'].dt.month
-  df_X_test["Year"] = df_X_test['Date'].dt.year
-  df_X_test["Saison"] = df_X_test["Month"].apply( lambda x : "Eté" if x in [12, 1, 2] else "Automne" if x in [3, 4, 5] else "Hiver" if x in [6, 7, 8] else "Printemps")
+  df_X_y_test["Date"]=pd.to_datetime(df_X_y_test["Date"], format = "%Y-%m-%d")
+  df_X_y_test["Month"] = df_X_y_test['Date'].dt.month
+  df_X_y_test["Year"] = df_X_y_test['Date'].dt.year
+  df_X_y_test["Saison"] = df_X_y_test["Month"].apply( lambda x : "Eté" if x in [12, 1, 2] else "Automne" if x in [3, 4, 5] else "Hiver" if x in [6, 7, 8] else "Printemps")
 
   ## 2.5 Ajout du climat
   climat_mapping = pd.read_csv("dico_scaler/climat_mapping.csv", index_col="Location")
   climat_mapping_series = climat_mapping.squeeze()  # Convertir en Series pour faciliter le mapping
-  df_X_test['Climat'] = df_X_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
+  df_X_y_test['Climat'] = df_X_y_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
   ## 2.6 Suppression des features
-  df_X_test = df_X_test.drop(["Sunshine","Evaporation"], axis = 1)
+  df_X_y_test = df_X_y_test.drop(["Sunshine","Evaporation"], axis = 1)
 
   ## 2.7 Traitement de la variable cible : Suppression des NaN et Label Encoder
-  df_X_test = df_X_test.dropna(subset=["RainTomorrow"], axis=0, how="any")
+  df_X_y_test = df_X_y_test.dropna(subset=["RainTomorrow"], axis=0, how="any")
   encoder=LabelEncoder()
-  df_X_test["RainTomorrow"] = encoder.fit_transform(df_X_test["RainTomorrow"])  #N=0, Y=1
+  df_X_y_test["RainTomorrow"] = encoder.fit_transform(df_X_y_test["RainTomorrow"])  #N=0, Y=1
 
   
   #-3 Choix du modèle--------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -306,11 +306,10 @@ if page == pages[5] :
   #Choix par radio bouton entre Logique d'entrainement temporelle ou non
   choix_preprocessing = st.selectbox("Choix entre Logique d'entrainement temporelle ou non",["temporel", "non-temporel"])
   
-  st.dataframe(df_X_test.head(10))
+  st.dataframe(df_X_y_test.head(10))
   # Sélectionner un jour (avant d'enlever Date)
   # Reste du preprocessing (Date supprimée) ##stop ici
 
-  st.header("Prédictions")
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   if choix_preprocessing == "temporel" :    
     # Affichage des modèles entrainés
@@ -321,8 +320,8 @@ if page == pages[5] :
       modele_temporel = load("models/xgb_25features_model.joblib")
     else :
       st.stop() # tres important evite de charger tout le reste du code tant que l'utilisateur n'a pas fait sa sélection
-  ### 3.1.A Preprocessing Florent------------------------------------------------------------------------------------------------------------------------------------------------
-  ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
+    ### 3.1.A Preprocessing Florent------------------------------------------------------------------------------------------------------------------------------------------------
+    ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
 
  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   elif choix_preprocessing == "non-temporel" :  
@@ -331,14 +330,24 @@ if page == pages[5] :
     if choix_model_non_temporel == "Régression logistique" :
       modele_non_temporel = load("models/LogReg_X_train_normal_model_and_threshold.joblib")
     elif choix_model_non_temporel == "XGB Classifier" :
-      modele_non_temporel = load("models/XGBClassifier_X_train_model_and_threshold.joblib ")
+      modele_non_temporel = load("models/XGBClassifier_X_train_model_and_threshold.joblib")
     elif choix_model_non_temporel == "RNN" :
       modele_non_temporel = load("models/RNN_ABO_X_scaled_normal_model_and_threshold.joblib")
     else :
       st.stop() # tres important evite de charger tout le reste du code tant que l'utilisateur n'a pas fait sa sélection
 
-  ### 3.2.A Preprocessing Amelie------------------------------------------------------------------------------------------------------------------------------------------------
-  ### 3.2.B Modelisation Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+    ### 3.2.A Preprocessing Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+    X_test_temporel = df_X_y_test.drop(columns = ["RainTomorrow"])
+    y_test_temporel = df_X_y_test["RainTomorrow"] #pourrait différer cela les suppresions de lignes en NaN (Florent : RainToday)
+
+    ### 3.2.B Modelisation Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+    best_model     = modele_non_temporel["model"]
+    best_threshold = modele_non_temporel["threshold"]
+
+    # et pour prédire sur X_new :
+    y_proba = best_model.predict_proba(X_test_temporel)[:,1]
+    y_pred  = (y_proba >= best_threshold).astype(int)
+  
 
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   else :
@@ -348,6 +357,54 @@ if page == pages[5] :
   
   
   # 4 Evaluation------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  #-----Fonction Evalutaion----------------------------------------------------------------------------------------------------------------------------------------------------------
+  def evaluation (y_test,y_pred, y_proba, model_name) :
+      acc, f1 = accuracy_score(y_test, y_pred), f1_score(y_test, y_pred)
+
+      print(f"\n{model_name} | F1: {f1:.3f} | Acc: {acc:.3f} | Seuil: {best_threshold:.2f}")
+      # print("Meilleurs hyperparamètres:", best_params) pourquoi cela ne marche plus?
+      print("Classification report:\n", classification_report(y_test, y_pred))
+      print("Rapport déséquilibre:\n", classification_report_imbalanced(y_test, y_pred))
+      
+      ## Création de la figure avec deux sous-graphiques côte à côte
+      fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+      
+      # Calcul de metrics à afficher sur le graphique
+      f1_positive = f1_score(y_test, y_pred, pos_label=1)
+      roc_auc = roc_auc_score(y_test, y_proba)
+
+      ## Matrice de confusion
+      cm = confusion_matrix(y_test, y_pred)
+      disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+      disp.plot(ax=axes[0], cmap="Blues", values_format="d", colorbar=False)
+      axes[0].set_title("Matrice de Confusion")
+          
+      ## Courbe ROC
+      fpr, tpr, _ = roc_curve(y_test, y_proba)
+      axes[1].plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}", color="darkorange")
+      axes[1].plot([0, 1], [0, 1], linestyle='--', color="gray")
+      axes[1].set_xlabel("Taux de faux positifs")
+      axes[1].set_ylabel("Taux de vrais positifs")
+      axes[1].set_title("Courbe ROC")
+      axes[1].legend()
+      axes[1].grid(True)
+
+      # Titre principal et sous-titre
+      fig.suptitle(f"Évaluation du modèle : {model_name}", fontsize=14)
+      fig.text(
+          0.5,         # x (milieu de la figure)
+          0.88,        # y (juste sous le suptitle)
+          f"F1-score (classe positive) : {f1_positive:.3f}",
+          ha='center', # alignement horizontal centré
+          fontsize=12
+      )
+      plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+      plt.show()
+   #-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------  
+  st.header("Prédictions puis évaluation")
+  st.dataframe(df_X_y_test.head(3))
+  evaluation(y_test_temporel, y_pred, y_proba, choix_model_non_temporel)
+  
   # 5 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
