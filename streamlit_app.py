@@ -12,12 +12,12 @@ import plotly.express as px
 
 from sklearn.preprocessing import LabelEncoder
 from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.metrics import (accuracy_score, f1_score, classification_report, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, 
+from sklearn.metrics import (accuracy_score, f1_score, classification_report, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay,
                              roc_curve, precision_recall_fscore_support, brier_score_loss)
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.decomposition import PCA
 
-from imblearn.metrics import classification_report_imbalanced 
+from imblearn.metrics import classification_report_imbalanced
 import xgboost as xgb
 
 import streamlit_shap
@@ -49,19 +49,19 @@ page=st.sidebar.radio("Aller vers", pages)
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 3. Sur la page Exploration
 if page == pages[0] :
-  st.header("Introduction") 
+  st.header("Introduction")
   st.write("Ce projet traite... ") #\n n'apporte rien autant faire un nouveau st.write
-  
+
   # test visuel
   st.title("st.titre") #Gras, 44px
   st.header("st.header") #36px semi gras, comme ##
-  st.subheader("st.subheader") #28px semi gras, comme ### 
-  st.write("#### 4#..") #24px semi gras 
-  st.write("##### 5#..") #20px semi gras 
-  st.write("###### 6#..") #16px semi gras 
+  st.subheader("st.subheader") #28px semi gras, comme ###
+  st.write("#### 4#..") #24px semi gras
+  st.write("##### 5#..") #20px semi gras
+  st.write("###### 6#..") #16px semi gras
   st.write("normal") #16px normal (comme un print dans une jupyer NB)
   st.markdown("Texte **gras**, *italique*, et un [lien](https://example.com)") #pour mettre en forme
-  
+
 
   st.dataframe(df.head(10))
   st.write(df.shape) #equivalent de print
@@ -78,15 +78,15 @@ if page == pages[1] :
   fig = plt.figure()
   sns.countplot(x = 'RainTomorrow', data = df)
   st.pyplot(fig)
-  
+
   # Impact de features sur la variable cible
   fig1 = plt.figure()
   sns.countplot(x = 'RainTomorrow', hue='RainToday', data = df, title = "lien Variable cible et RainToday")
   st.pyplot(fig1)
-  
+
   fig2 = sns.catplot(x='Cloud3pm', y='RainTomorrow', data=df, kind='point')
   st.pyplot(fig2)
-  
+
   fig3 = sns.lmplot(x='Temp3pm', y='RainTomorrow', hue="Cloud3pm", data=df)
   st.pyplot(fig3)
 
@@ -107,10 +107,10 @@ if page == pages[2] :
   X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 if page == pages[3] :
-  st.header("Evaluation") 
+  st.header("Evaluation")
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 if page == pages[4] :
-  st.header("Datas actuelles") 
+  st.header("Datas actuelles")
 #-1. Collecte des données actuelles---------------------------------------------------------------------------------------------------------------------------------
   #1.1 Initialisation
   ##1.1.1 Liste des mois
@@ -118,49 +118,49 @@ if page == pages[4] :
   mois_depart = mois_courant - relativedelta(months=1) # Mois de départ = mois précédent
   # Générer les 13 mois vers le passé (de -12 à 0 mois avant mois_depart)
   liste_mois_a_selectionner = [(mois_depart - relativedelta(months=i)).strftime("%Y%m") for i in reversed(range(13))]
-  
+
   ##1.1.2 Dico stations
-  with open("dico_scaler/dico_station_geo.pkl", "rb") as fichier:
-    dico_charge = pickle.load(fichier)
+  with open("dico_scaler/dico_station.pkl", "rb") as fichier:
+    dico_stations_BOM = pickle.load(fichier)
 
   ##1.1.3 Noms des colonnes dans le df généré (futur X_test)
-  nom_colonnes_df_principal = {"Minimum temperature (°C)" : "MinTemp", 
+  nom_colonnes_df_principal = {"Minimum temperature (°C)" : "MinTemp",
                              "Maximum temperature (°C)": "MaxTemp",
-                             "Rainfall (mm)" : "Rainfall", 
-                             "Evaporation (mm)" : "Evaporation", 
+                             "Rainfall (mm)" : "Rainfall",
+                             "Evaporation (mm)" : "Evaporation",
                              "Sunshine (hours)" :"Sunshine",
-                             "Direction of maximum wind gust ":"WindGustDir", 
+                             "Direction of maximum wind gust ":"WindGustDir",
                              "Speed of maximum wind gust (km/h)" : "WindGustSpeed",
                              "Time of maximum wind gust" : "Time of maximum wind gust" ,  #nouvelle colonne
                              "9am Temperature (°C)": "Temp9am",
-                             "9am relative humidity (%)" : "Humidity9am", 
+                             "9am relative humidity (%)" : "Humidity9am",
                              "9am cloud amount (oktas)":"Cloud9am",
-                             "9am wind direction" :"WindDir9am", 
-                             "9am wind speed (km/h)": "WindSpeed9am", 
+                             "9am wind direction" :"WindDir9am",
+                             "9am wind speed (km/h)": "WindSpeed9am",
                              "9am MSL pressure (hPa)":"Pressure9am",
-                             "3pm Temperature (°C)":"Temp3pm", 
+                             "3pm Temperature (°C)":"Temp3pm",
                              "3pm relative humidity (%)":"Humidity3pm",
-                             "3pm cloud amount (oktas)": "Cloud3pm", 
+                             "3pm cloud amount (oktas)": "Cloud3pm",
                              "3pm wind direction" : "WindDir3pm",
-                             "3pm wind speed (km/h)": "WindSpeed3pm", 
+                             "3pm wind speed (km/h)": "WindSpeed3pm",
                              "3pm MSL pressure (hPa)":"Pressure3pm"}
 
   # 1.2 Saisie utilisateur
   st.subheader("Sélection ")
-  
+
   liste_mois = st.multiselect("Sélectionnez un ou plusieurs mois", liste_mois_a_selectionner)
 
   ## 1.2.1 Afficher le nom des stations dans la liste déroulante
   # Multiselect avec affichage du nom de la station
   stations_selectionnees = st.multiselect(
       "Sélectionnez une ou plusieurs stations",
-      options=list(dico_charge.keys()),
-      format_func=lambda x: dico_charge[x][0])
+      options=list(dico_stations_BOM.keys()),
+      format_func=lambda x: dico_stations_BOM[x][2])
   # Générer un dictionnaire filtré identique en format à l’original
   dico_stations_DWO = {
-      k: dico_charge[k]
+      k: dico_stations_BOM[k]
       for k in stations_selectionnees}
-  
+
   # 1.2.2 Tant que l'utilisateur n'a pas fait de sélection complète (mois + location) ne pas aller plus loin
   if not liste_mois or not dico_stations_DWO:
       st.stop()
@@ -180,12 +180,12 @@ if page == pages[4] :
           # Essayer de télécharger le fichier avec des en-têtes de type navigateur
           headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
           # Effectuer la requête
-          response = requests.get(url_concatene, headers=headers) 
+          response = requests.get(url_concatene, headers=headers)
           # Vérifier si la requête est réussie
           if response.status_code == 200:
               # Utiliser StringIO pour lire le texte CSV dans un DataFrame
               csv_data = StringIO(response.text)
-              # L'entete n'est a=pas toujours sur la meme ligne : On lit le fichier ligne par ligne pour trouver le header qui commence par ,"Date", 
+              # L'entete n'est a=pas toujours sur la meme ligne : On lit le fichier ligne par ligne pour trouver le header qui commence par ,"Date",
               lines = response.text.splitlines()
               # Trouver la ligne où "Date" apparaît pour la première fois
               header_row = None
@@ -193,27 +193,27 @@ if page == pages[4] :
                   if "Date" in line:
                       header_row = i
                       break
-              df_recupere = pd.read_csv(csv_data, sep=",", skiprows=header_row, encoding="latin1")              
+              df_recupere = pd.read_csv(csv_data, sep=",", skiprows=header_row, encoding="latin1")
               #Faire un df consolidé par station
               if i == 1 :
                   df_une_station = df_une_station
               else :
-                  df_une_station = pd.concat([df_une_station, df_recupere], ignore_index=True) 
+                  df_une_station = pd.concat([df_une_station, df_recupere], ignore_index=True)
           else:
               st.write("Erreur lors du chargement de l'URL pour {} de {} : {} - URL: {}".format(le_annee_mois, dico_stations_DWO[no_report][2], response.status_code,url_concatene))
-      
+
     # 2.2 Mise en forme du csv collecté
-      df_une_station = df_une_station.rename(nom_colonnes_df_principal, axis = 1) #Mettre les noms de colonnes du df principal      
+      df_une_station = df_une_station.rename(nom_colonnes_df_principal, axis = 1) #Mettre les noms de colonnes du df principal
       df_une_station = df_une_station.drop(["Unnamed: 0","Time of maximum wind gust"],axis =1) #Suppression de colonnes
 
       #Ajout de colonnes
       #Insérer en 2e position (loc=1) le nom de la station (3e colonne du dico) associé à ce rapport dans le dictionnaire dico_stations_DWO
-      df_une_station.insert(1,column="Location", value=dico_stations_DWO[no_report][2]) # 
+      df_une_station.insert(1,column="Location", value=dico_stations_DWO[no_report][2]) #
 
       df_une_station["RainToday"]=df_une_station["Rainfall"].apply(lambda x: "Yes" if x>1 else "No")
-      #Met les valeurs de RainToday à l'indice précédent dans RainTomorrow 
+      #Met les valeurs de RainToday à l'indice précédent dans RainTomorrow
       df_une_station["RainTomorrow"] = np.roll(df_une_station["RainToday"].values, 1) #Ex RainToday 02/01/24 -> RainTomorrow 01/01/2024
-      
+
       #Supprimer le dernier relevé du df car RainTomorrow y sera toujours inconnu (suite au np.roll c'est la valeur de RainToday a la 1e ligne du df, et il aurait fallu celle du lendemain de la dernier ligne du df).
       df_une_station.drop(df_une_station.index[-1], inplace=True)
 
@@ -225,8 +225,8 @@ if page == pages[4] :
       if compteur == 1 :
           df_conso_station = df_une_station
       else :
-          df_conso_station = pd.concat([df_conso_station, df_une_station], ignore_index=True) 
-  
+          df_conso_station = pd.concat([df_conso_station, df_une_station], ignore_index=True)
+
 
   #-2. Preprocessing de base---------------------------------------------------------------------------------------------------------------------------------
   df_X_test = df_conso_station
@@ -242,8 +242,10 @@ if page == pages[4] :
   nan_ratio = nan_counts_per_location / total_cells_per_location
   valid_locations = nan_ratio[nan_ratio <= 0.25].index
   df_X_test = df_X_test[df_X_test["Location"].isin(valid_locations)]
- 
+
   ## 2.3 Ajout de la latitude et de la longitude
+  with open("dico_scaler/dico_station_geo.pkl", "rb") as fichier:
+    dico_charge = pickle.load(fichier)
   df_dico_station_geo = pd.DataFrame.from_dict(dico_charge, orient="index",columns=["Lat", "Lon"])
   df_dico_station_geo.columns = ["Latitude", "Longitude"]
   df_X_test = df_X_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
@@ -253,13 +255,13 @@ if page == pages[4] :
   df_X_test["Month"] = df_X_test['Date'].dt.month
   df_X_test["Year"] = df_X_test['Date'].dt.year
   df_X_test["Saison"] = df_X_test["Month"].apply( lambda x : "Eté" if x in [12, 1, 2] else "Automne" if x in [3, 4, 5] else "Hiver" if x in [6, 7, 8] else "Printemps")
-  
+
   ## 2.4 Ajout du climat
-  climat_mapping = pd.read_csv("dico scaler\climat_mapping.csv", index_col="Location")
+  climat_mapping = pd.read_csv("dico_scaler/climat_mapping.csv", index_col="Location")
   climat_mapping_series = climat_mapping.squeeze()  # Convertir en Series pour faciliter le mapping
   df_X_test['Climat'] = df_X_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
-  ## 2.5 Suppression des features 
+  ## 2.5 Suppression des features
   df_X_test = df_X_test.drop(["Sunshine","Evaporation"], axis = 1)
 
   ## 2.6 Traitement de la variable cible : Suppression des NaN et Label Encoder
@@ -269,6 +271,7 @@ if page == pages[4] :
 
   # 3 Sélectionner un jour (avant d'enlever Date)---------------------------------------------------------------------------------------------------------------------------------
   st.dataframe(df_X_test.head(10))
+  #pb pour ouvrir dico station et choisir
   # 4 Reste du preprocessing (Date supprimée) ##stop ici
 
   # 5 Prédiction------------------------------------------------------------------------------------------------------------------------------------------------------------------
