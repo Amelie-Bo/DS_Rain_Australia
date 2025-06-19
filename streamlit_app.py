@@ -1,4 +1,5 @@
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## Chargement des librairies
 import streamlit as st
 
@@ -34,20 +35,22 @@ import requests
 from io import StringIO
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 1. Charger les données
 df = pd.read_csv("data/weatherAUS.csv")
 liste_colonne_df = df.columns #servira à ordonner les colonnes dans les données actuelles
 X_test = pd.read_csv("data/data_2024-25.csv")
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 2. Définir la structure
 st.title("Projet de classification binaire sur la pluie en Australie") # sera répercuté sur toutes les pages du Streamlit
 st.sidebar.title("Sommaire")
-pages=["Exploration", "DataVizualization", "Modélisation","Evaluation","Datas actuelles"]
+pages=["Le projet", "Exmploration", "DataVizualization", "Preprocessing", "Modélisation et Evaluation","Datas actuelles", "Conclusion"]
 page=st.sidebar.radio("Aller vers", pages)
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# 3. Sur la page Exploration
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 3. Sur la page de présentation du projet
 if page == pages[0] :
   st.header("Introduction")
   st.write("Ce projet traite... ") #\n n'apporte rien autant faire un nouveau st.write
@@ -69,10 +72,19 @@ if page == pages[0] :
 
   if st.checkbox("Afficher les NA") : #quand on coche la case, on affiche la méthode ci-dessous
     st.dataframe(df.isna().sum())
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# 3. Sur la page Datavizualisation
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 4. Sur la page Exploration du jeu de données (présentation des variables, des manquants)
 #Sur le fichier source? sur le nouveau jeu de données?
 if page == pages[1] :
+
+  st.header("Exploration")
+
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 5. Sur la page Datavizualisation
+#Sur le fichier source? sur le nouveau jeu de données?
+if page == pages[2] :
   st.header("DataVizualization")
   #Afficher un graphique de la variable cible "Pluie demain"
   fig = plt.figure()
@@ -98,18 +110,24 @@ if page == pages[1] :
   #Plotly
   # fig4 = px.scatter(df, x=, y=, title="")
   st.plotly_chart(fig4) #ADD
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# 4. Sur la page Modélisation
-if page == pages[2] :
-  st.header("Modélisation")# sur X_test preprocesse ou non?(mon preprocessing + modelisationprend qq minutes )
 
-  # Supprimer les variables inutiles
-  X_test = X_test.drop(['Evaporation', 'Sunshine'], axis=1)
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 6. Sur la page de présentation du Preprocessing
 if page == pages[3] :
-  st.header("Evaluation")
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  st.header("Preprocessing")
+
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 7. Sur la page Modélisation et Evaluation
 if page == pages[4] :
+  st.header("Modélisation")# sur X_test preprocesse ou non?(mon preprocessing + modelisationprend qq minutes )
+  st.header("Evaluation")
+
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 8. Sur la page utilisant les données actuellement sur le site du BOM
+if page == pages[5] :
   st.header("Datas actuelles")
 #-1. Collecte des données actuelles---------------------------------------------------------------------------------------------------------------------------------
   #1.1 Initialisation
@@ -237,11 +255,24 @@ if page == pages[4] :
   df_X_test["WindGustSpeed"] = df_X_test["WindGustSpeed"].apply(lambda x: 0 if x =="Calm" else x)
 
   ## 2.2 Suprresion 25% des NAN
-  total_cells_per_location = df_X_test.groupby("Location").size() * (df_X_test.shape[1] - 1)  # -1 pour exclure la colonne Location elle-même
+  # === Calcul du ratio de NaN ===
+  total_cells_per_location = df_X_test.groupby("Location").size() * (df_X_test.shape[1] - 1)  # -1 car on exclut 'Location'
   nan_counts_per_location = df_X_test.drop(columns="Location").isna().groupby(df_X_test["Location"]).sum().sum(axis=1)
   nan_ratio = nan_counts_per_location / total_cells_per_location
-  valid_locations = nan_ratio[nan_ratio <= 0.25].index
+  # === Filtrage des stations valides ===
+  valid_locations = nan_ratio[nan_ratio <= 0.25].index.to_list() #>>ex : {'BadgerysCreek', 'Albury'}
   df_X_test = df_X_test[df_X_test["Location"].isin(valid_locations)]
+  
+  # === Messages Streamlit ===
+  # noms des stations selectionné par l'utilisateur
+  stations_selectionnees_noms = [dico_stations_BOM[code][2] for code in stations_selectionnees]  #>> ex : 0:"Penrith" 1:"AliceSprings"
+  stations_supprimees = sorted(set(stations_selectionnees_noms) - set(valid_locations)) #>> Stations sélectionnées : Penrith, AliceSprings
+  if len(valid_locations) == 0:  
+    st.error("Toutes les stations sélectionnées ont plus de 25% de données manquantes. Veuillez en choisir d'autres.")
+    st.stop()
+  elif len(stations_supprimees) > 0:
+      st.warning(f"Les stations suivantes ont été exclues car elles contiennent plus de 25% de données manquantes : {', '.join(stations_supprimees)}")
+
 
   ## 2.3 Ajout de la latitude et de la longitude
   with open("dico_scaler/dico_station_geo.pkl", "rb") as fichier:
@@ -250,30 +281,77 @@ if page == pages[4] :
   df_dico_station_geo.columns = ["Latitude", "Longitude"]
   df_X_test = df_X_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
 
-  ## 2.3 Date, Saison
+  ## 2.4 Date, Saison
   df_X_test["Date"]=pd.to_datetime(df_X_test["Date"], format = "%Y-%m-%d")
   df_X_test["Month"] = df_X_test['Date'].dt.month
   df_X_test["Year"] = df_X_test['Date'].dt.year
   df_X_test["Saison"] = df_X_test["Month"].apply( lambda x : "Eté" if x in [12, 1, 2] else "Automne" if x in [3, 4, 5] else "Hiver" if x in [6, 7, 8] else "Printemps")
 
-  ## 2.4 Ajout du climat
+  ## 2.5 Ajout du climat
   climat_mapping = pd.read_csv("dico_scaler/climat_mapping.csv", index_col="Location")
   climat_mapping_series = climat_mapping.squeeze()  # Convertir en Series pour faciliter le mapping
   df_X_test['Climat'] = df_X_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
-  ## 2.5 Suppression des features
+  ## 2.6 Suppression des features
   df_X_test = df_X_test.drop(["Sunshine","Evaporation"], axis = 1)
 
-  ## 2.6 Traitement de la variable cible : Suppression des NaN et Label Encoder
+  ## 2.7 Traitement de la variable cible : Suppression des NaN et Label Encoder
   df_X_test = df_X_test.dropna(subset=["RainTomorrow"], axis=0, how="any")
   encoder=LabelEncoder()
   df_X_test["RainTomorrow"] = encoder.fit_transform(df_X_test["RainTomorrow"])  #N=0, Y=1
 
-  # 3 Sélectionner un jour (avant d'enlever Date)---------------------------------------------------------------------------------------------------------------------------------
+  
+  #-3 Choix du modèle--------------------------------------------------------------------------------------------------------------------------------------------------------------
+  st.header("Choix du preprocessing")
+  #Choix par radio bouton entre Logique d'entrainement temporelle ou non
+  choix_preprocessing = st.selectbox("Choix entre Logique d'entrainement temporelle ou non",["temporel", "non-temporel"])
+  
   st.dataframe(df_X_test.head(10))
-  #pb pour ouvrir dico station et choisir
-  # 4 Reste du preprocessing (Date supprimée) ##stop ici
+  # Sélectionner un jour (avant d'enlever Date)
+  # Reste du preprocessing (Date supprimée) ##stop ici
 
-  # 5 Prédiction------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  # 6 Evaluation------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  # 7 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
+  st.header("Prédictions")
+  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  if choix_preprocessing == "temporel" :    
+    # Affichage des modèles entrainés
+    choix_model_temporel = st.selectbox("Choix du modèle",["model_florent_1","modele_florent_2"])
+    if choix_model_temporel == "modele_florent_1" :
+      modele_temporel = load("models/xgb_25features_model.joblib")
+    elif choix_model_temporel == "modele_florent_2" :
+      modele_temporel = load("models/xgb_25features_model.joblib")
+    else :
+      st.stop() # tres important evite de charger tout le reste du code tant que l'utilisateur n'a pas fait sa sélection
+  ### 3.1.A Preprocessing Florent------------------------------------------------------------------------------------------------------------------------------------------------
+  ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
+
+ #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  elif choix_preprocessing == "non-temporel" :  
+    # Affichage des modèles entrainés
+    choix_model_non_temporel = st.selectbox("Choix du modèle",["Régression logistique","XGB Classifier", "RNN"])
+    if choix_model_non_temporel == "Régression logistique" :
+      modele_non_temporel = load("models/LogReg_X_train_normal_model_and_threshold.joblib")
+    elif choix_model_non_temporel == "XGB Classifier" :
+      modele_non_temporel = load("models/XGBClassifier_X_train_model_and_threshold.joblib ")
+    elif choix_model_non_temporel == "RNN" :
+      modele_non_temporel = load("models/RNN_ABO_X_scaled_normal_model_and_threshold.joblib")
+    else :
+      st.stop() # tres important evite de charger tout le reste du code tant que l'utilisateur n'a pas fait sa sélection
+
+  ### 3.2.A Preprocessing Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+  ### 3.2.B Modelisation Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+
+  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  else :
+    st.stop()
+  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  
+  
+  
+  # 4 Evaluation------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  # 5 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 9. Sur la page de présentation du Preprocessing
+if page == pages[6] :
+  st.header("Conclusion")
