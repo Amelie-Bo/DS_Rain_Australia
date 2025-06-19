@@ -1,5 +1,6 @@
 # visualization.py
-
+#pas utiliser pour le moment
+# Ce module contient des fonctions de visualisation
 import pandas as pd
 import plotly.express as px
 
