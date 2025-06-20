@@ -37,10 +37,25 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# 0. Cache #Comment cela fonctionne? 
+#Par exemple pour la fonction_pickle, elle sera utilisée plusieurs fois, mais comment mettre en cache chacune des fois ou le cache est utilisé?
+@st.cache_data
+def load_dataset(path):
+    return pd.read_csv(path)
+
+@st.cache_resource 
+def load_model(path):
+    return load(path)
+
+@st.cache_resource # A utiliser
+def load_pickle(path):
+    with open(path, "rb") as f:
+        return pickle.load(f)
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------        
 # 1. Charger les données
-df = pd.read_csv("data/weatherAUS.csv")
+df = load_dataset("data/weatherAUS.csv")
 liste_colonne_df = df.columns #servira à ordonner les colonnes dans les données actuelles
-X_test = pd.read_csv("data/data_2024-25.csv")
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 2. Définir la structure
@@ -324,7 +339,7 @@ if page == pages[5] :
         st.stop()
     
     # Chargement du modèle
-    modele_non_temporel = load(liste_modele_temporel[choix_model_temporel])
+    modele_non_temporel = load_model(liste_modele_temporel[choix_model_temporel])
 
     ### 3.1.A Preprocessing Florent------------------------------------------------------------------------------------------------------------------------------------------------
     do_preprocess = st.checkbox("Lancer preprocessing")
@@ -343,7 +358,7 @@ if page == pages[5] :
  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   elif choix_preprocessing == "non-temporel" :
     # Liste des modèles
-    model_paths = {
+    liste_modele_non_temporel = {
     "Régression logistique": "models/LogReg_X_train_normal_model_and_threshold.joblib",
     "XGB Classifier": "models/XGBClassifier_X_train_model_and_threshold.joblib",
     "RNN": "models/RNN_ABO_X_scaled_normal_model_and_threshold.joblib"}
@@ -354,7 +369,7 @@ if page == pages[5] :
         st.stop()
 
     # Chargement du modèle
-    modele_non_temporel = load(model_paths[choix_model_non_temporel])
+    modele_non_temporel = load_model(liste_modele_non_temporel[choix_model_non_temporel])
 
 
     ### 3.2.A Preprocessing Amelie------------------------------------------------------------------------------------------------------------------------------------------------
@@ -582,28 +597,34 @@ if page == pages[5] :
 
   # 4 Evaluation------------------------------------------------------------------------------------------------------------------------------------------------------------------
   #-----Fonction Evalutaion----------------------------------------------------------------------------------------------------------------------------------------------------------
-  def evaluation (y_test,y_pred, y_proba, model_name) :
-      acc, f1 = accuracy_score(y_test, y_pred), f1_score(y_test, y_pred)
-
-      print(f"\n{model_name} | F1: {f1:.3f} | Acc: {acc:.3f} | Seuil: {best_threshold:.2f}")
-      # print("Meilleurs hyperparamètres:", best_params) pourquoi cela ne marche plus?
-      print("Classification report:\n", classification_report(y_test, y_pred))
-      print("Rapport déséquilibre:\n", classification_report_imbalanced(y_test, y_pred))
-
-      ## Création de la figure avec deux sous-graphiques côte à côte
-      fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-      # Calcul de metrics à afficher sur le graphique
+  def evaluation_streamlit(y_test, y_pred, y_proba, model_name, best_threshold=None):
+      acc = accuracy_score(y_test, y_pred)
+      f1 = f1_score(y_test, y_pred)
       f1_positive = f1_score(y_test, y_pred, pos_label=1)
       roc_auc = roc_auc_score(y_test, y_proba)
 
-      ## Matrice de confusion
+      st.subheader(f"Évaluation du modèle : {model_name}")
+      if best_threshold is not None:
+          st.write(f"**F1-score**: {f1:.3f} | **Accuracy**: {acc:.3f} | **Seuil**: {best_threshold:.2f}")
+      else:
+          st.write(f"**F1-score**: {f1:.3f} | **Accuracy**: {acc:.3f}")
+
+      st.markdown("### Rapport de classification")
+      st.text(classification_report(y_test, y_pred))
+
+      st.markdown("### Rapport déséquilibre (Imbalanced)")
+      st.text(classification_report_imbalanced(y_test, y_pred))
+
+      ## Création de la figure
+      fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+      # Matrice de confusion
       cm = confusion_matrix(y_test, y_pred)
       disp = ConfusionMatrixDisplay(confusion_matrix=cm)
       disp.plot(ax=axes[0], cmap="Blues", values_format="d", colorbar=False)
       axes[0].set_title("Matrice de Confusion")
 
-      ## Courbe ROC
+      # Courbe ROC
       fpr, tpr, _ = roc_curve(y_test, y_proba)
       axes[1].plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}", color="darkorange")
       axes[1].plot([0, 1], [0, 1], linestyle='--', color="gray")
@@ -613,21 +634,21 @@ if page == pages[5] :
       axes[1].legend()
       axes[1].grid(True)
 
-      # Titre principal et sous-titre
+      # Mise en page et affichage dans Streamlit
       fig.suptitle(f"Évaluation du modèle : {model_name}", fontsize=14)
       fig.text(
-          0.5,         # x (milieu de la figure)
-          0.88,        # y (juste sous le suptitle)
+          0.5, 0.88,
           f"F1-score (classe positive) : {f1_positive:.3f}",
-          ha='center', # alignement horizontal centré
+          ha='center',
           fontsize=12
       )
       plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-      plt.show()
+      st.pyplot(fig)
+
    #-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------
   st.header("Prédictions puis évaluation")
   st.dataframe(df_X_y_test.head(3))
-  evaluation(y_test_temporel, y_pred, y_proba, choix_model_non_temporel)
+  evaluation_streamlit(y_test_temporel, y_pred, y_proba, choix_model_non_temporel)
 
   # 5 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
