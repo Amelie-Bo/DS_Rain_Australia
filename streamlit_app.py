@@ -524,6 +524,41 @@ if page == pages[5] :
     #### 3.2.A.8 Suppression de features (/!\ on perd la Date ici)
     X_test_temporel = X_test_temporel.drop(["Date","Location"],axis=1)
 
+    #### 3.2.A.9 Scaling
+    #####-----Fonction Scaling-----------------------------------------------------------------------------------------------------------------------------------------------
+    def add_engineered_features(X: pd.DataFrame,
+                                ref_year: int = 2007, #ref_year = 1e année du dataset d'entrainement est 0
+                                lat0: float = -25.0,
+                                lon0: float = 133.0) -> pd.DataFrame:
+        X_fe = X.copy()
+        # Deltas temporel 
+        X_fe['Year_delta']      = X_fe['Year']      - ref_year
+        # Deltas géographiques
+        # Transformer Latitude et Longitude en Latitude_delta et Longitude_delta : où le centre du dataset d'entrainement est 0, et correspond au centre de l'Australie.    
+        # A noter : un degré de longitude à l'équateur = 110km, et à 60°Sud = 60 km . Pour corriger, on peut faire un Haversine et encodage azimut.
+        X_fe['Latitude_delta']  = X_fe['Latitude']  - lat0
+        X_fe['Longitude_delta'] = X_fe['Longitude'] - lon0
+        # Log-transform
+        X_fe['Rainfall']    = np.log1p(X_fe['Rainfall'])
+        X_fe = X_fe.drop(['Year','Latitude','Longitude'], axis=1)
+        return X_fe
+
+
+    # Fonction pour charger et appliquer les scalers sur n’importe quel X
+    def load_and_apply_scalers(X_fe: pd.DataFrame,
+                                 import_path: str = "dico_scaler/scalers.joblib") -> pd.DataFrame:
+          artefact = load(import_path)
+          scalers, feats = artefact['scalers'], artefact['feature_lists']
+          X_scaled = X_fe.copy()
+          for key, cols in feats.items():
+              X_scaled[cols] = scalers[key].transform(X_scaled[cols])
+          return X_scaled
+    ####-----Fin Fonction-----------------------------------------------------------------------------------------------------------------------------------------------
+    
+    # Ajout des features d'ingénierie
+    X_test_fe= add_engineered_features(X_test_temporel, ref_year=2007, lat0=-25.0, lon0=133.0)
+    # Chargement et application des scalers (en paramètre le df obtenu avant)
+    X_test_temporel  = load_and_apply_scalers(X_test_fe,  import_path="dico_scaler/scalers.joblib")
 
     ### 3.2.B Modelisation Amelie------------------------------------------------------------------------------------------------------------------------------------------------
     do_predict = st.checkbox("Lancer prédiction")
