@@ -52,7 +52,7 @@ page=st.sidebar.radio("Aller vers", pages)
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 3. Sur la page de présentation du projet
 if page == pages[0] :
-  st.header("Introduction")
+  st.header("Intro")
   st.write("Ce projet traite... ") #\n n'apporte rien autant faire un nouveau st.write
 
   # test visuel
@@ -262,12 +262,12 @@ if page == pages[5] :
   # === Filtrage des stations valides ===
   valid_locations = nan_ratio[nan_ratio <= 0.25].index.to_list() #>>ex : {'BadgerysCreek', 'Albury'}
   df_X_y_test = df_X_y_test[df_X_y_test["Location"].isin(valid_locations)]
-  
+
   # === Messages Streamlit ===
   # noms des stations selectionné par l'utilisateur
   stations_selectionnees_noms = [dico_stations_BOM[code][2] for code in stations_selectionnees]  #>> ex : 0:"Penrith" 1:"AliceSprings"
   stations_supprimees = sorted(set(stations_selectionnees_noms) - set(valid_locations)) #>> Stations sélectionnées : Penrith, AliceSprings
-  if len(valid_locations) == 0:  
+  if len(valid_locations) == 0:
     st.error("Toutes les stations sélectionnées ont plus de 25% de données manquantes. Veuillez en choisir d'autres.")
     st.stop()
   elif len(stations_supprimees) > 0:
@@ -300,18 +300,18 @@ if page == pages[5] :
   encoder=LabelEncoder()
   df_X_y_test["RainTomorrow"] = encoder.fit_transform(df_X_y_test["RainTomorrow"])  #N=0, Y=1
 
-  
+
   #-3 Choix du modèle--------------------------------------------------------------------------------------------------------------------------------------------------------------
   st.header("Choix du preprocessing")
   #Choix par radio bouton entre Logique d'entrainement temporelle ou non
   choix_preprocessing = st.selectbox("Choix entre Logique d'entrainement temporelle ou non",["temporel", "non-temporel"])
-  
+
   st.dataframe(df_X_y_test.head(10))
   # Sélectionner un jour (avant d'enlever Date)
   # Reste du preprocessing (Date supprimée) ##stop ici
 
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  if choix_preprocessing == "temporel" :    
+  if choix_preprocessing == "temporel" :
     # Affichage des modèles entrainés
     choix_model_temporel = st.selectbox("Choix du modèle",["model_florent_1","modele_florent_2"])
     if choix_model_temporel == "modele_florent_1" :
@@ -324,7 +324,7 @@ if page == pages[5] :
     ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
 
  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  elif choix_preprocessing == "non-temporel" :  
+  elif choix_preprocessing == "non-temporel" :
     # Affichage des modèles entrainés
     choix_model_non_temporel = st.selectbox("Choix du modèle",["Régression logistique","XGB Classifier", "RNN"])
     if choix_model_non_temporel == "Régression logistique" :
@@ -337,8 +337,167 @@ if page == pages[5] :
       st.stop() # tres important evite de charger tout le reste du code tant que l'utilisateur n'a pas fait sa sélection
 
     ### 3.2.A Preprocessing Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+    #### 3.2.A.1 Suppresion des features avec trop de manquants
+    df_X_y_test = df_X_y_test.drop(["RainToday","Saison","Climat"], axis = 1)
+    
+    #### 3.2.A.2 Complétions autorisées
+    df_X_y_test["Pressure3pm"]=df_X_y_test["Pressure3pm"].fillna(df_X_y_test["Pressure9am"])
+    df_X_y_test["Pressure9am"]=df_X_y_test["Pressure9am"].fillna(df_X_y_test["Pressure3pm"])
+
+    df_X_y_test["WarmerTemp"] = df_X_y_test[["Temp9am", "Temp3pm"]].max(axis=1)
+    df_X_y_test["MaxTemp"]=df_X_y_test["MaxTemp"].fillna(df_X_y_test["WarmerTemp"].round(0)) #arrondi à l'entier comme la definition du BOM
+    df_X_y_test = df_X_y_test.drop(["WarmerTemp"],axis=1)
+
+    df_X_y_test["Temp3pm"]=df_X_y_test["Temp3pm"].fillna(df_X_y_test["MaxTemp"]) 
+
+    #### 3.2.A.3 Encodage Statless
+    #####-----Fonction Encodage Statless-----------------------------------------------------------------------------------------------------------------------------------------------
+    def encode_month(df, month_col="Month"):
+      """Encode le mois en sin et cos puis supprime la colonne originale."""
+      df['month_sin'] = np.sin(2 * np.pi * (df[month_col] - 1) / 12)
+      df['month_cos'] = np.cos(2 * np.pi * (df[month_col] - 1) / 12)
+      df=df.drop(columns=[month_col],axis=1)
+      return df
+
+    def encode_wind_direction(df):
+        # Encodage cyclique de la direction du vent (et du cas "pas de vent")
+        # 1) Définir la liste des 16 directions cycliques (rose des vents)
+        # ------------------------------------------------------------------------
+        #    Ici, on ordonne explicitement les directions dans le sens horaire,
+        #    en commençant par "N" à l’indice 0, puis "NNE", "NE", etc.
+        directions = [
+            "N",   "NNE", "NE",  "ENE",
+            "E",   "ESE", "SE",  "SSE",
+            "S",   "SSW", "SW",  "WSW",
+            "W",   "WNW", "NW",  "NNW"
+        ]
+
+        # ------------------------------------------------------------------------
+        # 2) Construire le mapping direction → angle (en radians)
+        # ------------------------------------------------------------------------
+        #    Chaque direction est associée à un angle = idx * (2π / 16),
+        #    où idx est l’indice de la direction dans la liste ci-dessus.
+        #    Ex. : "N" → 0 rad, "ENE" → 3 * (2π/16) = 3π/8, etc.
+        angle_mapping = {
+            dir_name: (idx * 2 * np.pi / 16)
+            for idx, dir_name in enumerate(directions)
+        }
+
+        # ------------------------------------------------------------------------
+        # 3) Parcourir chaque couple (colonne de direction, colonne de vitesse)
+        #    - Pour WindDir9am et WindDir3pm, on gère le cas “pas de vent”.
+        #    - Pour WindGustDir, la vitesse est toujours > 0 (pas de “pas de vent”).
+        #    On crée pour chaque couple :
+        #      • des colonnes sin/cos de l’angle (avec NaN si direction absente),
+        #      • éventuellement un indicateur NoWind_<col_speed> pour WindDir9am/3pm.
+        # ------------------------------------------------------------------------
+        for (col_dir, col_speed) in [
+            ("WindDir9am",  "WindSpeed9am"),
+            ("WindDir3pm",  "WindSpeed3pm"),
+            ("WindGustDir", "WindGustSpeed")
+        ]:
+            # ------------------------------------------------------------
+            # Détection du cas “pas de vent” ET direction absente/blanche
+            # ------------------------------------------------------------
+            handle_no_wind = col_dir in ["WindDir9am", "WindDir3pm"]
+            if handle_no_wind:
+                # a) Détecter les lignes où la vitesse vaut exactement 0
+                is_exact_zero = (df[col_speed] == 0)
+                # b) Détecter si la direction est manquante : NaN ou chaîne vide
+                mask_dir_missing = df[col_dir].isna() | (df[col_dir].astype(str).str.strip() == "")
+                # c) Combinaison : “pas de vent” ET direction absente
+                mask_no_wind = is_exact_zero & mask_dir_missing
+                # d) Créer l’indicateur NoWind_<col_speed> (1 si vitesse == 0)
+                #    On met 1 si vitesse = 0, même si direction présente ou non.
+                df[f"NoWind_{col_speed}"] = is_exact_zero.astype(int)
+            else:
+                # Pour WindGust, pas de “pas de vent” → on n’utilise pas NoWind
+                is_exact_zero = pd.Series(False, index=df.index)
+                mask_no_wind = pd.Series(False, index=df.index)
+
+            # ------------------------------------------------------------
+            # Mapper la direction textuelle → angle (NaN si direction absente ou non reconnue)
+            # ------------------------------------------------------------
+            df[f"{col_dir}_angle"] = df[col_dir].map(angle_mapping)
+
+            # ------------------------------------------------------------
+            # Si “pas de vent” ET direction absente, forcer angle = 0 rad
+            # ------------------------------------------------------------
+            if handle_no_wind:
+                df.loc[mask_no_wind, f"{col_dir}_angle"] = 0.0
+
+            # ------------------------------------------------------------
+            # Calculer sin(angle) et cos(angle)
+            #   • Si angle est NaN (direction absente pour d’autres raisons), sin/cos restent NaN.
+            #   • Si “pas de vent”, angle forcé à 0 → sin=0, cos=1.
+            #   • Sinon, angle valide → sin(angle), cos(angle).
+            # ------------------------------------------------------------
+            sin_col = f"{col_dir}_sin"
+            cos_col = f"{col_dir}_cos"
+            df[sin_col] = np.nan
+            df[cos_col] = np.nan
+
+            # a) Cas “pas de vent” (force angle=0) → sin=0, cos=1
+            if handle_no_wind:
+                df.loc[mask_no_wind, sin_col] = 0.0
+                df.loc[mask_no_wind, cos_col] = 1.0
+
+            # b) Cas angle valide pour toutes les lignes
+            mask_angle_valid = df[f"{col_dir}_angle"].notna()
+            df.loc[mask_angle_valid, sin_col] = np.sin(df.loc[mask_angle_valid, f"{col_dir}_angle"])
+            df.loc[mask_angle_valid, cos_col] = np.cos(df.loc[mask_angle_valid, f"{col_dir}_angle"])
+
+            # ------------------------------------------------------------
+            # Nettoyage final : supprimer les colonnes de direction textuelle et d’angle
+            # ------------------------------------------------------------
+            df.drop(columns=[col_dir, f"{col_dir}_angle"], inplace=True)
+
+        # ------------------------------------------------------------------------
+        # À l’issue de cette boucle :
+        # → Pour WindDir9am et WindDir3pm :
+        #     • Une colonne NoWind_<col_speed> (1 si vitesse == 0, 0 sinon).
+        #     • Deux colonnes <col_dir>_sin et <col_dir>_cos :
+        #         - Si “pas de vent” & direction absente → (0, 1).
+        #         - Si vent présent & angle valide → (sin(angle), cos(angle)).
+        #         - Si vent présent mais angle manquant → (NaN, NaN).
+        #
+        # → Pour WindGustDir :
+        #     • Pas de colonne NoWind (jamais de “pas de vent”).
+        #     • Deux colonnes WindGustDir_sin et WindGustDir_cos :
+        #         - Si direction valide → (sin(angle), cos(angle)).
+        #         - Sinon (colonne direction initiale absente/mal encodée) → (NaN, NaN).
+        # ------------------------------------------------------------------------
+        return df
+    #####-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------
+    
+    ##### Application de l'encodage stateless
+    df_X_y_test = encode_month(df_X_y_test)
+    df_X_y_test = encode_wind_direction(df_X_y_test)
+    
+    #### 3.2.A.5 Split Feaures/variable cible
     X_test_temporel = df_X_y_test.drop(columns = ["RainTomorrow"])
     y_test_temporel = df_X_y_test["RainTomorrow"] #pourrait différer cela les suppresions de lignes en NaN (Florent : RainToday)
+
+    #### 3.2.A.6 Complétion des NAN
+    #### 3.2.A.6.A Complétion des NAN nuages
+    with open("dico_scaler/cloud_imputer.pkl", "rb") as f:
+        transformer_cloud = cloudpickle.load(f)
+    X_test_temporel = transformer_cloud.transform(X_test_temporel)
+    #### 3.2.A.6.A Complétion des autres NAN
+    with open("dico_scaler/transformer_KNNImputerABO.pkl", "rb") as f:
+        transformer = cloudpickle.load(f)
+    X_test_temporel = transformer.transform(X_test_temporel)
+
+    #### 3.2.A.7 Enrichissement des features
+    def amplitude_thermique(X) :
+        X["Amplitude_Temp"] = X['MaxTemp']- X['MinTemp']
+        X = X.drop(["MaxTemp","MinTemp"],axis=1)        
+        return X 
+
+    X_test_temporel = amplitude_thermique(X_test_temporel)
+    #### 3.2.A.8 Suppression de features (/!\ on perd la Date ici)
+    X_test_temporel = X_test_temporel.drop(["Date","Location"],axis=1)
+ 
 
     ### 3.2.B Modelisation Amelie------------------------------------------------------------------------------------------------------------------------------------------------
     best_model     = modele_non_temporel["model"]
@@ -347,15 +506,15 @@ if page == pages[5] :
     # et pour prédire sur X_new :
     y_proba = best_model.predict_proba(X_test_temporel)[:,1]
     y_pred  = (y_proba >= best_threshold).astype(int)
-  
+
 
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   else :
     st.stop()
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  
-  
-  
+
+
+
   # 4 Evaluation------------------------------------------------------------------------------------------------------------------------------------------------------------------
   #-----Fonction Evalutaion----------------------------------------------------------------------------------------------------------------------------------------------------------
   def evaluation (y_test,y_pred, y_proba, model_name) :
@@ -365,10 +524,10 @@ if page == pages[5] :
       # print("Meilleurs hyperparamètres:", best_params) pourquoi cela ne marche plus?
       print("Classification report:\n", classification_report(y_test, y_pred))
       print("Rapport déséquilibre:\n", classification_report_imbalanced(y_test, y_pred))
-      
+
       ## Création de la figure avec deux sous-graphiques côte à côte
       fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-      
+
       # Calcul de metrics à afficher sur le graphique
       f1_positive = f1_score(y_test, y_pred, pos_label=1)
       roc_auc = roc_auc_score(y_test, y_proba)
@@ -378,7 +537,7 @@ if page == pages[5] :
       disp = ConfusionMatrixDisplay(confusion_matrix=cm)
       disp.plot(ax=axes[0], cmap="Blues", values_format="d", colorbar=False)
       axes[0].set_title("Matrice de Confusion")
-          
+
       ## Courbe ROC
       fpr, tpr, _ = roc_curve(y_test, y_proba)
       axes[1].plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}", color="darkorange")
@@ -400,11 +559,11 @@ if page == pages[5] :
       )
       plt.tight_layout(rect=[0, 0.03, 1, 0.95])
       plt.show()
-   #-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------  
+   #-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------
   st.header("Prédictions puis évaluation")
   st.dataframe(df_X_y_test.head(3))
   evaluation(y_test_temporel, y_pred, y_proba, choix_model_non_temporel)
-  
+
   # 5 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
