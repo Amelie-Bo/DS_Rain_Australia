@@ -312,34 +312,59 @@ if page == pages[5] :
 
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   if choix_preprocessing == "temporel" :
-    # Affichage des modèles entrainés
-    choix_model_temporel = st.selectbox("Choix du modèle",["model_florent_1","modele_florent_2"])
-    if choix_model_temporel == "modele_florent_1" :
-      modele_temporel = load("models/xgb_25features_model.joblib")
-    elif choix_model_temporel == "modele_florent_2" :
-      modele_temporel = load("models/xgb_25features_model.joblib")
-    else :
-      st.stop() # tres important evite de charger tout le reste du code tant que l'utilisateur n'a pas fait sa sélection
-    ### 3.1.A Preprocessing Florent------------------------------------------------------------------------------------------------------------------------------------------------
-    ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
+    # Liste des modèles
+    liste_modele_temporel = {
+    "modele_florent_1": "models/xgb_25features_model.joblib",
+    "modele_florent_2": "models/xgb_25features_model.joblib",}
+    
+    # Sélection des modèles entrainés
+    choix_model_temporel = st.selectbox("Choix du modèle",["--- Sélectionner ---", "modele_florent_1", "modele_florent_2"])
 
+    if choix_model_temporel == "--- Sélectionner ---": # Bloquer l'exécution si aucun modèle n'est sélectionné
+        st.stop()
+    
+    # Chargement du modèle
+    modele_non_temporel = load(liste_modele_temporel[choix_model_temporel])
+
+    ### 3.1.A Preprocessing Florent------------------------------------------------------------------------------------------------------------------------------------------------
+    do_preprocess = st.checkbox("Lancer preprocessing")
+    if not do_preprocess:
+        st.stop()
+    
+    #Ton code pour préprocessé ce df de test
+
+    ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
+    do_predict = st.checkbox("Lancer prédiction")
+    if not do_predict:
+        st.stop()
+    # Ton code pour prédire sur test
+
+    
  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   elif choix_preprocessing == "non-temporel" :
+    # Liste des modèles
+    model_paths = {
+    "Régression logistique": "models/LogReg_X_train_normal_model_and_threshold.joblib",
+    "XGB Classifier": "models/XGBClassifier_X_train_model_and_threshold.joblib",
+    "RNN": "models/RNN_ABO_X_scaled_normal_model_and_threshold.joblib"}
     # Affichage des modèles entrainés
-    choix_model_non_temporel = st.selectbox("Choix du modèle",["Régression logistique","XGB Classifier", "RNN"])
-    if choix_model_non_temporel == "Régression logistique" :
-      modele_non_temporel = load("models/LogReg_X_train_normal_model_and_threshold.joblib")
-    elif choix_model_non_temporel == "XGB Classifier" :
-      modele_non_temporel = load("models/XGBClassifier_X_train_model_and_threshold.joblib")
-    elif choix_model_non_temporel == "RNN" :
-      modele_non_temporel = load("models/RNN_ABO_X_scaled_normal_model_and_threshold.joblib")
-    else :
-      st.stop() # tres important evite de charger tout le reste du code tant que l'utilisateur n'a pas fait sa sélection
+    choix_model_non_temporel = st.selectbox("Choix du modèle",["--- Sélectionner ---", "Régression logistique", "XGB Classifier", "RNN"])
+
+    if choix_model_non_temporel == "--- Sélectionner ---": # Bloquer l'exécution si aucun modèle n'est sélectionné
+        st.stop()
+
+    # Chargement du modèle
+    modele_non_temporel = load(model_paths[choix_model_non_temporel])
+
 
     ### 3.2.A Preprocessing Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+    do_preprocess = st.checkbox("Lancer preprocessing")
+    if not do_preprocess:
+        st.stop()
+
     #### 3.2.A.1 Suppresion des features avec trop de manquants
     df_X_y_test = df_X_y_test.drop(["RainToday","Saison","Climat"], axis = 1)
-    
+
     #### 3.2.A.2 Complétions autorisées
     df_X_y_test["Pressure3pm"]=df_X_y_test["Pressure3pm"].fillna(df_X_y_test["Pressure9am"])
     df_X_y_test["Pressure9am"]=df_X_y_test["Pressure9am"].fillna(df_X_y_test["Pressure3pm"])
@@ -348,7 +373,7 @@ if page == pages[5] :
     df_X_y_test["MaxTemp"]=df_X_y_test["MaxTemp"].fillna(df_X_y_test["WarmerTemp"].round(0)) #arrondi à l'entier comme la definition du BOM
     df_X_y_test = df_X_y_test.drop(["WarmerTemp"],axis=1)
 
-    df_X_y_test["Temp3pm"]=df_X_y_test["Temp3pm"].fillna(df_X_y_test["MaxTemp"]) 
+    df_X_y_test["Temp3pm"]=df_X_y_test["Temp3pm"].fillna(df_X_y_test["MaxTemp"])
 
     #### 3.2.A.3 Encodage Statless
     #####-----Fonction Encodage Statless-----------------------------------------------------------------------------------------------------------------------------------------------
@@ -469,11 +494,11 @@ if page == pages[5] :
         # ------------------------------------------------------------------------
         return df
     #####-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------
-    
+
     ##### Application de l'encodage stateless
     df_X_y_test = encode_month(df_X_y_test)
     df_X_y_test = encode_wind_direction(df_X_y_test)
-    
+
     #### 3.2.A.5 Split Feaures/variable cible
     X_test_temporel = df_X_y_test.drop(columns = ["RainTomorrow"])
     y_test_temporel = df_X_y_test["RainTomorrow"] #pourrait différer cela les suppresions de lignes en NaN (Florent : RainToday)
@@ -483,7 +508,7 @@ if page == pages[5] :
     with open("dico_scaler/cloud_imputer.pkl", "rb") as f:
         transformer_cloud = cloudpickle.load(f)
     X_test_temporel = transformer_cloud.transform(X_test_temporel)
-    #### 3.2.A.6.A Complétion des autres NAN
+    #### 3.2.A.6.B Complétion des autres NAN
     with open("dico_scaler/transformer_KNNImputerABO.pkl", "rb") as f:
         transformer = cloudpickle.load(f)
     X_test_temporel = transformer.transform(X_test_temporel)
@@ -491,15 +516,20 @@ if page == pages[5] :
     #### 3.2.A.7 Enrichissement des features
     def amplitude_thermique(X) :
         X["Amplitude_Temp"] = X['MaxTemp']- X['MinTemp']
-        X = X.drop(["MaxTemp","MinTemp"],axis=1)        
-        return X 
+        X = X.drop(["MaxTemp","MinTemp"],axis=1)
+        return X
 
     X_test_temporel = amplitude_thermique(X_test_temporel)
+
     #### 3.2.A.8 Suppression de features (/!\ on perd la Date ici)
     X_test_temporel = X_test_temporel.drop(["Date","Location"],axis=1)
- 
+
 
     ### 3.2.B Modelisation Amelie------------------------------------------------------------------------------------------------------------------------------------------------
+    do_predict = st.checkbox("Lancer prédiction")
+    if not do_predict:
+        st.stop()
+
     best_model     = modele_non_temporel["model"]
     best_threshold = modele_non_temporel["threshold"]
 
