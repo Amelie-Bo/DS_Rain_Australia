@@ -181,7 +181,7 @@ if page == pages[5] :
   # 1.2 Saisie utilisateur
   st.subheader("Sélection ")
 
-  liste_mois = st.multiselect("Sélectionnez un ou plusieurs mois", liste_mois_a_selectionner)
+  liste_mois = st.multiselect("Sélectionnez un mois", liste_mois_a_selectionner)
 
   ## 1.2.1 Afficher le nom des stations dans la liste déroulante
   # Multiselect avec affichage du nom de la station
@@ -315,15 +315,29 @@ if page == pages[5] :
   encoder=LabelEncoder()
   df_X_y_test["RainTomorrow"] = encoder.fit_transform(df_X_y_test["RainTomorrow"])  #N=0, Y=1
 
+  ## 2.8 Choix du jour à prédire
+  # /!\ ne pas pouvoir sélectionner la dernière valeur chronologique de Date, sinon nous ne pourrons pas montrer la valeur le lendemain. ce qui est le but de notre prédiction.  
+  # Menu déroulant pour sélectionner un jour
+  st.subheader("Sélectionnez le jour à prédire")
+
+  # liste de dates en excluant la date la plus récente
+  dates_uniques = df_X_y_test["Date"].unique()
+  date_plus_recente = dates_uniques.max()
+  dates_a_afficher = [date for date in dates_uniques if date != date_plus_recente]
+
+  date_selectionnee = st.selectbox("Sélectionnez une date", ["--- Sélectionner ---"] + list(dates_a_afficher))
+  if date_selectionnee == "--- Sélectionner ---": # Bloquer l'exécution si aucun modèle n'est sélectionné
+    st.stop()
+
+  ## 2.9 Journée à prédire
+  df_X_y_test = df_X_y_test[(df_X_y_test["Date"] == date_selectionnee)] 
+  st.write("Données à prédire")
+  st.dataframe(df_X_y_test.head(6)) # df_X_y_test fait 2 lignes * nb de stations sélectionnées.
 
   #-3 Choix du modèle--------------------------------------------------------------------------------------------------------------------------------------------------------------
   st.header("Choix du preprocessing")
   #Choix par radio bouton entre Logique d'entrainement temporelle ou non
   choix_preprocessing = st.selectbox("Choix entre Logique d'entrainement temporelle ou non",["temporel", "non-temporel"])
-
-  st.dataframe(df_X_y_test.head(10))
-  # Sélectionner un jour (avant d'enlever Date)
-  # Reste du preprocessing (Date supprimée) ##stop ici
 
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   if choix_preprocessing == "temporel" :
@@ -536,7 +550,7 @@ if page == pages[5] :
 
     X_test_temporel = amplitude_thermique(X_test_temporel)
 
-    #### 3.2.A.8 Suppression de features (/!\ on perd la Date ici)
+    #### 3.2.A.8 Suppression de features 
     X_test_temporel = X_test_temporel.drop(["Date","Location"],axis=1)
 
     #### 3.2.A.9 Scaling
@@ -575,6 +589,11 @@ if page == pages[5] :
     # Chargement et application des scalers (en paramètre le df obtenu avant)
     X_test_temporel  = load_and_apply_scalers(X_test_fe,  import_path="dico_scaler/scalers.joblib")
 
+    #Aperçu des features en fin de preprocessing 
+    st.write("Aperçu des features en fin de preprocessing")
+    st.dataframe(X_test_temporel.head(3))
+    
+    #----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     ### 3.2.B Modelisation Amelie------------------------------------------------------------------------------------------------------------------------------------------------
     do_predict = st.checkbox("Lancer prédiction")
     if not do_predict:
@@ -647,7 +666,7 @@ if page == pages[5] :
 
    #-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------
   st.header("Prédictions puis évaluation")
-  st.dataframe(df_X_y_test.head(3))
+  
   evaluation_streamlit(y_test_temporel, y_pred, y_proba, choix_model_non_temporel)
 
   # 5 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
