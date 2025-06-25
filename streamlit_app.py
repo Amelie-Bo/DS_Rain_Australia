@@ -44,10 +44,10 @@ from dateutil.relativedelta import relativedelta
 # Configs et chemins
 # -----------------------------
 st.set_page_config(page_title="Rain in Australia", layout="wide")
-DATA_PATH = "/content/data"
-DATASET_PATH = "/content/dataset"
-MODELS_PATH = "/content/models"
-SCALER_PATH = "/content/dico_scaler" #dico, scaler, imputer
+DATA_PATH = "/data"
+DATASET_PATH = "/dataset"
+MODELS_PATH = "/models"
+SCALER_PATH = "/dico_scaler" #dico, scaler, imputer
 
 MODEL_LIST = {
     "XGBoost Final": "final_xgb_model_pluie.joblib",
@@ -715,7 +715,7 @@ if page == pages[2] :
     
   ## 2.4 Ajout du climat
   climat_mapping = pd.read_csv(f"{SCALER_PATH}/climat_mapping.csv")
-  climat_mapping_series = climat_mapping.squeeze()  # Convertir en Series pour faciliter le mapping
+  climat_mapping_series = climat_mapping.set_index("Location")["Climate"]
   df_X_y_test['Climat'] = df_X_y_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
   ## 2.5 Date, Saison
