@@ -45,7 +45,9 @@ from dateutil.relativedelta import relativedelta
 # -----------------------------
 st.set_page_config(page_title="Rain in Australia", layout="wide")
 DATA_PATH = "/content/data"
+DATASET_PATH = "/content/dataset"
 MODELS_PATH = "/content/models"
+SCALER_PATH = "/content/dico_scaler" #dico, scaler, imputer
 
 MODEL_LIST = {
     "XGBoost Final": "final_xgb_model_pluie.joblib",
@@ -63,15 +65,12 @@ MODEL_LIST_Non_temporel = {
 # -----------------------------
 # fonctions
 # -----------------------------
-
-# 0. Cache #Comment cela fonctionne?
-#Par exemple pour la fonction_pickle, elle sera utilisée plusieurs fois, mais comment mettre en cache chacune des fois ou le cache est utilisé?
 @st.cache_data
 def load_data():
     df = pd.read_csv(f"{DATA_PATH}/weatherAUS.csv")
-    liste = df.columns # servira pour créer les colonnes des nouvelles données.
-    gps = pd.read_csv(f"{DATA_PATH}/localisations_gps.csv")
-    climat = pd.read_csv(f"{DATA_PATH}/climat_mapping.csv")
+    liste = list(df.columns) # servira pour créer les colonnes des nouvelles données.
+    gps = pd.read_csv(f"{SCALER_PATH}/localisations_gps.csv")
+    climat = pd.read_csv(f"{SCALER_PATH}/climat_mapping.csv")
     df = df.merge(gps, on="Location", how="left")
     df = df.merge(climat, on="Location", how="left")
     df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
@@ -80,14 +79,15 @@ def load_data():
 @st.cache_data    
 def load_dataset(name):
     if name == "Ancien test set":
-        X = pd.read_csv(f"{DATA_PATH}/X_test_reduit.csv", index_col=0)
-        y = pd.read_csv(f"{DATA_PATH}/y_test.csv", index_col=0).squeeze()
+        X = pd.read_csv(f"{DATASET_PATH}/X_test_reduit.csv", index_col=0)
+        y = pd.read_csv(f"{DATASET_PATH}/y_test.csv", index_col=0).squeeze()
     else:
-        X = pd.read_csv(f"{DATA_PATH}/data_2024-25_reduit.csv", index_col=0)
-        y = pd.read_csv(f"{DATA_PATH}/target_2024-25.csv", index_col=0).squeeze()
+        X = pd.read_csv(f"{DATASET_PATH}/data_2024-25_reduit.csv", index_col=0)
+        y = pd.read_csv(f"{DATASET_PATH}/target_2024-25.csv", index_col=0).squeeze()
     y = y.astype(int)
     return X, y
 
+# Cache pour les modèles entrainés
 @st.cache_resource
 def load_model(name):
     return joblib.load(os.path.join(MODELS_PATH, MODEL_LIST[name]))
@@ -96,14 +96,25 @@ def load_model(name):
 def load_model_non_temporel(name):
     return joblib.load(os.path.join(MODELS_PATH, MODEL_LIST_Non_temporel[name]))
 
-@st.cache_resource
-def load_pickle(path): # Utiliser?
-    with open(path, "rb") as f:
-        return pickle.load(f)
-
 @st.cache_data
 def load_features():
     return joblib.load(os.path.join(MODELS_PATH, "final_xgb_features_list.joblib"))
+
+#Cache pour les imputers, scalers, dico
+@st.cache_resource
+def load_cloudpickle(scaler):
+    with open(f"{SCALER_PATH}/{scaler}", "rb") as f:
+        return cloudpickle.load(f)
+
+@st.cache_resource
+def load_pickle(scaler):
+    with open(f"{SCALER_PATH}/{scaler}", "rb") as f:
+        return pickle.load(f)
+
+@st.cache_resource
+def load_joblib(scaler):
+  return joblib.load(os.path.join(SCALER_PATH, scaler))
+
 
 def afficher_resultats(model, X, y, label, seuil=0.5):
     proba = model.predict_proba(X)[:, 1]
@@ -562,8 +573,7 @@ if page == pages[2] :
   liste_mois_a_selectionner = [(mois_depart - relativedelta(months=i)).strftime("%Y%m") for i in reversed(range(13))]
 
   ##1.1.2 Dico stations
-  with open("dico_scaler/dico_station.pkl", "rb") as fichier:
-    dico_stations_BOM = pickle.load(fichier)
+  dico_stations_BOM = load_pickle("dico_station.pkl")
 
   ##1.1.3 Noms des colonnes dans le df généré (futur X_test)
   nom_colonnes_df_principal = {"Minimum temperature (°C)" : "MinTemp",
@@ -697,24 +707,22 @@ if page == pages[2] :
   elif len(stations_supprimees) > 0:
       st.warning(f"Les stations suivantes ont été exclues car elles contiennent plus de 25% de données manquantes : {', '.join(stations_supprimees)}")
 
-
   ## 2.3 Ajout de la latitude et de la longitude
-  with open("dico_scaler/dico_station_geo.pkl", "rb") as fichier:
-    dico_charge = pickle.load(fichier)
+  dico_charge = load_pickle("dico_station_geo.pkl") #ecart avec localisations_gps.csv : ajout des coordonnées de Goulburn
   df_dico_station_geo = pd.DataFrame.from_dict(dico_charge, orient="index",columns=["Lat", "Lon"])
   df_dico_station_geo.columns = ["Latitude", "Longitude"]
   df_X_y_test = df_X_y_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
+    
+  ## 2.4 Ajout du climat
+  climat_mapping = pd.read_csv(f"{SCALER_PATH}/climat_mapping.csv")
+  climat_mapping_series = climat_mapping.squeeze()  # Convertir en Series pour faciliter le mapping
+  df_X_y_test['Climat'] = df_X_y_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
-  ## 2.4 Date, Saison
+  ## 2.5 Date, Saison
   df_X_y_test["Date"]=pd.to_datetime(df_X_y_test["Date"], format = "%Y-%m-%d")
   df_X_y_test["Month"] = df_X_y_test['Date'].dt.month
   df_X_y_test["Year"] = df_X_y_test['Date'].dt.year
   df_X_y_test["Saison"] = df_X_y_test["Month"].apply( lambda x : "Eté" if x in [12, 1, 2] else "Automne" if x in [3, 4, 5] else "Hiver" if x in [6, 7, 8] else "Printemps")
-
-  ## 2.5 Ajout du climat
-  climat_mapping = pd.read_csv("data/climat_mapping.csv", index_col="Location")
-  climat_mapping_series = climat_mapping.squeeze()  # Convertir en Series pour faciliter le mapping
-  df_X_y_test['Climat'] = df_X_y_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
   ## 2.6 Suppression des features
   df_X_y_test = df_X_y_test.drop(["Sunshine","Evaporation"], axis = 1)
@@ -765,10 +773,10 @@ if page == pages[2] :
         st.stop()
 
     # --- Chargement des scalers / modèles ---
-    scalers = joblib.load(os.path.join(DATA_PATH, "weather_scalers.joblib"))
+    scalers = load_joblib("weather_scalers.joblib")
     top_features = joblib.load(os.path.join(MODELS_PATH, "final_xgb_features_list.joblib"))
-    scaler_knn = joblib.load(os.path.join(DATA_PATH, "scaler_knn.joblib"))
-    knn_model = joblib.load(os.path.join(DATA_PATH, "knn_model.joblib"))
+    scaler_knn = load_joblib("scaler_knn.joblib")
+    knn_model = load_joblib("knn_model.joblib")
 
     # --- Fonctions --- 
     def impute_wind_features(df):
@@ -1090,12 +1098,10 @@ if page == pages[2] :
 
     #### 3.2.A.6 Complétion des NAN
     #### 3.2.A.6.A Complétion des NAN nuages
-    with open("dico_scaler/cloud_imputer.pkl", "rb") as f:
-        transformer_cloud = cloudpickle.load(f)
+    transformer_cloud = load_cloudpickle("cloud_imputer.pkl")
     X_test_temporel = transformer_cloud.transform(X_test_temporel)
     #### 3.2.A.6.B Complétion des autres NAN
-    with open("dico_scaler/transformer_KNNImputerABO.pkl", "rb") as f:
-        transformer = cloudpickle.load(f)
+    transformer = load_cloudpickle("transformer_KNNImputerABO.pkl")
     X_test_temporel = transformer.transform(X_test_temporel)
 
     #### 3.2.A.7 Enrichissement des features
