@@ -96,7 +96,7 @@ def load_model(name):
 def load_model_non_temporel(name):
     return joblib.load(os.path.join(MODELS_PATH, MODEL_LIST_Non_temporel[name]))
 
-@st.cache_data
+@st.cache_resource
 def load_features():
     return joblib.load(os.path.join(MODELS_PATH, "final_xgb_features_list.joblib"))
 
