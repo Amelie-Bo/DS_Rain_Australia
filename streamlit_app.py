@@ -44,10 +44,10 @@ from dateutil.relativedelta import relativedelta
 # Configs et chemins
 # -----------------------------
 st.set_page_config(page_title="Rain in Australia", layout="wide")
-DATA_PATH = "/data"
-DATASET_PATH = "/dataset"
-MODELS_PATH = "/models"
-SCALER_PATH = "/dico_scaler" #dico, scaler, imputer
+DATA_PATH = "data"
+DATASET_PATH = "dataset"
+MODELS_PATH = "models"
+SCALER_PATH = "dico_scaler" #dico, scaler, imputer
 
 MODEL_LIST = {
     "XGBoost Final": "final_xgb_model_pluie.joblib",
@@ -67,10 +67,10 @@ MODEL_LIST_Non_temporel = {
 # -----------------------------
 @st.cache_data
 def load_data():
-    df = pd.read_csv(f"{DATA_PATH}/weatherAUS.csv")
+    df = pd.read_csv(os.path.join(DATA_PATH, "weatherAUS.csv"))
     liste = list(df.columns) # servira pour créer les colonnes des nouvelles données.
-    gps = pd.read_csv(f"{SCALER_PATH}/localisations_gps.csv")
-    climat = pd.read_csv(f"{SCALER_PATH}/climat_mapping.csv")
+    gps = pd.read_csv(os.path.join(SCALER_PATH, "localisations_gps.csv"))
+    climat = pd.read_csv(os.path.join(SCALER_PATH, "climat_mapping.csv"))
     df = df.merge(gps, on="Location", how="left")
     df = df.merge(climat, on="Location", how="left")
     df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
@@ -79,11 +79,11 @@ def load_data():
 @st.cache_data    
 def load_dataset(name):
     if name == "Ancien test set":
-        X = pd.read_csv(f"{DATASET_PATH}/X_test_reduit.csv", index_col=0)
-        y = pd.read_csv(f"{DATASET_PATH}/y_test.csv", index_col=0).squeeze()
+        X = pd.read_csv(os.path.join(DATASET_PATH,"X_test_reduit.csv"), index_col=0)
+        y = pd.read_csv(os.path.join(DATASET_PATH,"y_test.csv"), index_col=0).squeeze()
     else:
-        X = pd.read_csv(f"{DATASET_PATH}/data_2024-25_reduit.csv", index_col=0)
-        y = pd.read_csv(f"{DATASET_PATH}/target_2024-25.csv", index_col=0).squeeze()
+        X = pd.read_csv(os.path.join(DATASET_PATH,"data_2024-25_reduit.csv"), index_col=0)
+        y = pd.read_csv(os.path.join(DATASET_PATH,"target_2024-25.csv"), index_col=0).squeeze()
     y = y.astype(int)
     return X, y
 
@@ -103,12 +103,12 @@ def load_features():
 #Cache pour les imputers, scalers, dico
 @st.cache_resource
 def load_cloudpickle(scaler):
-    with open(f"{SCALER_PATH}/{scaler}", "rb") as f:
+    with open(os.path.join(SCALER_PATH, scaler), "rb") as f:
         return cloudpickle.load(f)
 
 @st.cache_resource
 def load_pickle(scaler):
-    with open(f"{SCALER_PATH}/{scaler}", "rb") as f:
+    with open(os.path.join(SCALER_PATH, scaler), "rb") as f:
         return pickle.load(f)
 
 @st.cache_resource
@@ -714,7 +714,7 @@ if page == pages[2] :
   df_X_y_test = df_X_y_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
     
   ## 2.4 Ajout du climat
-  climat_mapping = pd.read_csv(f"{SCALER_PATH}/climat_mapping.csv")
+  climat_mapping = df = pd.read_csv(os.path.join(SCALER_PATH, "climat_mapping.csv"))
   climat_mapping_series = climat_mapping.set_index("Location")["Climate"]
   df_X_y_test['Climat'] = df_X_y_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
