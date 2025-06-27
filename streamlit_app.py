@@ -1,6 +1,8 @@
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## Chargement des librairies
+# -----------------------------
+# Chargement des librairies
+# -----------------------------
 import streamlit as st
 
 import pandas as pd
@@ -44,6 +46,8 @@ from dateutil.relativedelta import relativedelta
 # Configs et chemins
 # -----------------------------
 st.set_page_config(page_title="Rain in Australia", layout="wide")
+
+
 DATA_PATH = "data"
 DATASET_PATH = "dataset"
 MODELS_PATH = "models"
@@ -63,7 +67,7 @@ MODEL_LIST_Non_temporel = {
     "RNN": "RNN_ABO_X_scaled_normal_model_and_threshold.joblib"}
 
 # -----------------------------
-# fonctions
+#  CACHE
 # -----------------------------
 @st.cache_data
 def load_data():
@@ -74,9 +78,9 @@ def load_data():
     df = df.merge(gps, on="Location", how="left")
     df = df.merge(climat, on="Location", how="left")
     df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
-    return df, liste 
+    return df, liste
 
-@st.cache_data    
+@st.cache_data
 def load_dataset(name):
     if name == "Ancien test set":
         X = pd.read_csv(os.path.join(DATASET_PATH,"X_test_reduit.csv"), index_col=0)
@@ -86,6 +90,13 @@ def load_dataset(name):
         y = pd.read_csv(os.path.join(DATASET_PATH,"target_2024-25.csv"), index_col=0).squeeze()
     y = y.astype(int)
     return X, y
+
+@st.cache_data
+def load_old_dataset():
+  X = pd.read_csv(os.path.join(DATASET_PATH, "X_test_reduit.csv"), index_col=0)
+  y = pd.read_csv(os.path.join(DATASET_PATH, "y_test.csv"), index_col=0).squeeze()
+  y = y.astype(int)
+  return X, y
 
 # Cache pour les modèles entrainés
 @st.cache_resource
@@ -98,7 +109,7 @@ def load_model_non_temporel(name):
 
 @st.cache_resource
 def load_features():
-    return joblib.load(os.path.join(MODELS_PATH, "final_xgb_features_list.joblib"))
+  return joblib.load(os.path.join(MODELS_PATH, "xgb_25features_list.joblib")) 
 
 #Cache pour les imputers, scalers, dico
 @st.cache_resource
@@ -115,7 +126,12 @@ def load_pickle(scaler):
 def load_joblib(scaler):
   return joblib.load(os.path.join(SCALER_PATH, scaler))
 
-
+# -------------------------------
+# FONCTIONS
+# -------------------------------
+# -------------------------------
+# AFFICHAGE DES RÉSULTATS
+# -------------------------------
 def afficher_resultats(model, X, y, label, seuil=0.5):
     proba = model.predict_proba(X)[:, 1]
     y_pred = (proba >= seuil).astype(int)
@@ -124,31 +140,33 @@ def afficher_resultats(model, X, y, label, seuil=0.5):
     report = classification_report(y, y_pred, output_dict=True)
     cm = confusion_matrix(y, y_pred)
 
-    st.markdown(f"###  Résultats sur : **{label}**")
+    st.markdown(f"### Résultats sur : **{label}**")
     col1, col2 = st.columns([2, 1])
 
     with col1:
         st.markdown("#### Rapport de classification")
         st.dataframe(pd.DataFrame(report).T.round(2))
+
         st.markdown("#### Matrice de confusion")
         fig_cm = px.imshow(cm, text_auto=True, color_continuous_scale="Blues")
         fig_cm.update_layout(xaxis_title="Prédit", yaxis_title="Réel")
-        st.plotly_chart(fig_cm, use_container_width=True)
+        st.plotly_chart(fig_cm, use_container_width=True, key=f"plot_cm_{label}")
 
     with col2:
         st.metric("F1 Score", f"{f1:.2f}")
         st.metric("ROC AUC", f"{auc:.2f}")
+
         fpr, tpr, _ = roc_curve(y, proba)
         fig_roc = go.Figure()
         fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name="ROC Curve"))
         fig_roc.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Random", line=dict(dash="dash")))
         fig_roc.update_layout(title="Courbe ROC", xaxis_title="Faux positifs", yaxis_title="Vrais positifs")
-        st.plotly_chart(fig_roc, use_container_width=True)
+        st.plotly_chart(fig_roc, use_container_width=True, key=f"plot_roc_{label}")
 
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 1. Charger les données
-df, liste_colonne_df  = load_data() 
+df, liste_colonne_df  = load_data()
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # 2. Définir la structure
@@ -322,7 +340,7 @@ if page == "Analyse exploratoire":
     max_date = df_station.loc[df_station["MaxTemp"].idxmax(), "Date"]
 
     col1, col2 = st.columns(2)
-    col1.metric("🌨️ Temp. min", f"{min_temp:.1f} °C", f"📅 {min_date.date()}")
+    col1.metric("❄️ Temp. min", f"{min_temp:.1f} °C", f"📅 {min_date.date()}")
     col2.metric("🔥 Temp. max", f"{max_temp:.1f} °C", f"📅 {max_date.date()}")
 
     # ----------------------------
@@ -385,7 +403,7 @@ if page == "Analyse exploratoire":
 
     # ----------------------------
     # Évolution des précipitations mensuelles
-# ----------------------------
+    # ----------------------------
     df_station["YearMonth"] = df_station["Date"].dt.to_period("M").astype(str)
     df_trend = df_station.groupby("YearMonth")["Rainfall"].mean().reset_index()
     df_trend["Date"] = pd.to_datetime(df_trend["YearMonth"])
@@ -519,41 +537,65 @@ if page == "Analyse exploratoire":
 # -----------------------------
 # Page 2 : comparaison des modèles
 # -----------------------------
-elif page == "Comparaison des modèles":
+if page == "Comparaison des modèles":
 
-  # -------------------------------
-  # AFFICHAGE SHAP (XGBoost uniquement)
+    # -------------------------------
+    # FONCTION SHAP
+    # -------------------------------
+    def afficher_shap(model, X, sample_size):
+        st.markdown("## Interprétabilité avec SHAP")
 
-  # -------------------------------
-  #
-  # -------------------------------
-  st.title(" Comparaison des performances modèles")
+        X_sample = X.sample(sample_size, random_state=42)
+        st.info(f"Affichage basé sur un échantillon de **{sample_size} lignes**.")
 
-  # Choix du modèle
-  model_choice = st.selectbox(" Choisissez un modèle :", list(MODEL_LIST.keys()))
+        with st.spinner("Calcul des valeurs SHAP..."):
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X_sample)
 
-  # Choix du seuil ajustable
-  default_threshold = 0.38 if model_choice == "XGBoost Final" else 0.5
-  seuil = st.slider("🎯 Seuil de décision (classification)", 0.0, 1.0, step=0.01, value=default_threshold)
+        # Bar plot
+        st.markdown("#### Importance globale des variables (bar plot)")
+        fig_bar, ax = plt.subplots()
+        shap.plots.bar(
+            shap.Explanation(
+                values=shap_values,
+                base_values=explainer.expected_value,
+                data=X_sample,
+                feature_names=X_sample.columns.tolist()
+            ),
+            show=False,
+            ax=ax
+        )
+        st.pyplot(fig_bar)
 
-  # Chargement des objets
-  model = load_model(model_choice)
-  features = load_features()
-  X_old, y_old = load_dataset("Ancien test set")
-  X_new, y_new = load_dataset("Nouvelles données")
+        # Summary plot
+        st.markdown("#### Répartition des impacts (summary plot)")
+        fig_summary = plt.figure()
+        shap.summary_plot(shap_values, X_sample, plot_type="dot", show=False)
+        st.pyplot(fig_summary)
 
-  # Résultats
-  st.divider()
-  st.header(f" Performances du modèle **{model_choice}**")
+    # -------------------------------
+    # AFFICHAGE PRINCIPAL
+    # -------------------------------
+    st.title(" Comparaison des performances modèles")
 
-  afficher_resultats(model, X_old[features], y_old, "Ancien test set", seuil)
-  st.divider()
-  afficher_resultats(model, X_new[features], y_new, "Nouvelles données", seuil)
+    model_choice = st.selectbox("Choisissez un modèle :", list(MODEL_LIST.keys()), key="select_model")
+    default_threshold = 0.38 if model_choice == "XGBoost Final" else 0.5
+    seuil = st.slider("🎯 Seuil de décision (classification)", 0.0, 1.0, step=0.01, value=default_threshold, key="seuil_slider")
 
-  # SHAP uniquement pour XGBoost
-  if model_choice == "XGBoost Final":
-      st.divider()
-      afficher_shap(model, X_old[features])
+    model = load_model(model_choice)
+    features = load_features()
+    X_old, y_old = load_old_dataset()
+
+    st.divider()
+    st.header(f" Performances du modèle **{model_choice}** sur les anciennes données")
+    afficher_resultats(model, X_old[features], y_old, "Ancien test set", seuil)
+
+    if model_choice == "XGBoost Final":
+        st.divider()
+        max_sample = min(500, len(X_old))
+        sample_size = st.slider("🔍 Taille de l'échantillon pour SHAP", min_value=50, max_value=max_sample, value=200, step=50, key="slider_shap")
+        afficher_shap(model, X_old[features], sample_size)
+
 
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -712,7 +754,7 @@ if page == pages[2] :
   df_dico_station_geo = pd.DataFrame.from_dict(dico_charge, orient="index",columns=["Lat", "Lon"])
   df_dico_station_geo.columns = ["Latitude", "Longitude"]
   df_X_y_test = df_X_y_test.merge(right=df_dico_station_geo, left_on="Location", right_index=True, how="left")
-    
+
   ## 2.4 Ajout du climat
   climat_mapping = df = pd.read_csv(os.path.join(SCALER_PATH, "climat_mapping.csv"))
   climat_mapping_series = climat_mapping.set_index("Location")["Climate"]
@@ -778,7 +820,7 @@ if page == pages[2] :
     scaler_knn = load_joblib("scaler_knn.joblib")
     knn_model = load_joblib("knn_model.joblib")
 
-    # --- Fonctions --- 
+    # --- Fonctions ---
     def impute_wind_features(df):
       df = df.copy()
       df["WindSpeed9am"] = pd.to_numeric(df["WindSpeed9am"], errors="coerce")
@@ -899,9 +941,9 @@ if page == pages[2] :
         df[["Latitude", "Longitude"]] = scalers["latlong"].transform(df[["Latitude", "Longitude"]])
 
         return df
-      
-    # --- Preprocessing --- 
-    def preprocessing_Florent(df) :    
+
+    # --- Preprocessing ---
+    def preprocessing_Florent(df) :
       df.dropna(subset=["RainToday"], inplace=True)
       df["RainTomorrow"] = df["RainTomorrow"].astype(int)
       df["RainToday"] = df["RainToday"].astype(int)
@@ -928,8 +970,8 @@ if page == pages[2] :
       y_true = df["RainTomorrow"]
       dates = df["Date"]
       return X, y_true, dates, df
-    
-    # --- Application du preprocessing --- 
+
+    # --- Application du preprocessing ---
     X, y_true, dates, df = preprocessing_Florent(df_X_y_test)
 
     ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
