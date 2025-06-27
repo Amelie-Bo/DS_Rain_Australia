@@ -774,22 +774,23 @@ if page == pages[2] :
   df_X_y_test["RainTomorrow"] = df_X_y_test["RainTomorrow"].map({"Yes": 1, "No": 0})
   df_X_y_test["RainToday"] = df_X_y_test["RainToday"].map({"Yes": 1, "No": 0})
 
-  ## 2.8 Choix du jour à prédire
-  # /!\ ne pas pouvoir sélectionner la dernière valeur chronologique de Date, sinon nous ne pourrons pas montrer la valeur le lendemain. ce qui est le but de notre prédiction.
-  # Menu déroulant pour sélectionner un jour
-  st.subheader("Sélectionnez le jour à prédire")
+  ##### ## 2.8 Choix du jour à prédire
+  ##### # /!\ ne pas pouvoir sélectionner la dernière valeur chronologique de Date, sinon nous ne pourrons pas montrer la valeur le lendemain. ce qui est le but de notre prédiction.
+  ##### # Menu déroulant pour sélectionner un jour
+  ##### st.subheader("Sélectionnez le jour à prédire")
+  ##### 
+  ##### # liste de dates en excluant la date la plus récente
+  ##### dates_uniques = df_X_y_test["Date"].unique()
+  ##### date_plus_recente = dates_uniques.max()
+  ##### dates_a_afficher = [date for date in dates_uniques if date != date_plus_recente]
 
-  # liste de dates en excluant la date la plus récente
-  dates_uniques = df_X_y_test["Date"].unique()
-  date_plus_recente = dates_uniques.max()
-  dates_a_afficher = [date for date in dates_uniques if date != date_plus_recente]
-
-  date_selectionnee = st.selectbox("Sélectionnez une date", ["--- Sélectionner ---"] + list(dates_a_afficher))
-  if date_selectionnee == "--- Sélectionner ---": # Bloquer l'exécution si aucun modèle n'est sélectionné
-    st.stop()
-
-  ## 2.9 Journée à prédire
-  df_X_y_test = df_X_y_test[(df_X_y_test["Date"] == date_selectionnee)]
+  ##### date_selectionnee = st.selectbox("Sélectionnez une date", ["--- Sélectionner ---"] + list(dates_a_afficher))
+  ##### if date_selectionnee == "--- Sélectionner ---": # Bloquer l'exécution si aucun modèle n'est sélectionné
+  #####   st.stop()
+  ##### 
+  ##### ## 2.9 Journée à prédire
+  ##### df_X_y_test = df_X_y_test[(df_X_y_test["Date"] == date_selectionnee)]
+  
   st.write("Données à prédire")
   st.dataframe(df_X_y_test.head(6)) # df_X_y_test fait 2 lignes * nb de stations sélectionnées.
 
@@ -1203,12 +1204,11 @@ if page == pages[2] :
     if not do_predict:
         st.stop()
 
-    best_model     = modele_non_temporel["model"]
-    best_threshold = modele_non_temporel["threshold"]
-
-    # et pour prédire sur X_new :
-    y_proba = best_model.predict_proba(X_test_temporel)[:,1]
-    y_pred  = (y_proba >= best_threshold).astype(int)
+    model = modele_non_temporel["model"]
+    X = X_test_temporel
+    y = y_test_temporel
+  
+    best_threshold = modele_non_temporel["threshold"] #seuil optimisé lors de l'entrainement : préco pour l'évaluation
 
 
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1217,66 +1217,22 @@ if page == pages[2] :
   #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-
-  # 4 Evaluation------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  #-----Fonction Evalutaion----------------------------------------------------------------------------------------------------------------------------------------------------------
-  def evaluation_streamlit(y_test, y_pred, y_proba, model_name, best_threshold=None):
-      acc = accuracy_score(y_test, y_pred)
-      f1 = f1_score(y_test, y_pred)
-      f1_positive = f1_score(y_test, y_pred, pos_label=1)
-      roc_auc = roc_auc_score(y_test, y_proba)
-
-      st.subheader(f"Évaluation du modèle : {model_name}")
-      if best_threshold is not None:
-          st.write(f"**F1-score**: {f1:.3f} | **Accuracy**: {acc:.3f} | **Seuil**: {best_threshold:.2f}")
-      else:
-          st.write(f"**F1-score**: {f1:.3f} | **Accuracy**: {acc:.3f}")
-
-      st.markdown("### Rapport de classification")
-      st.text(classification_report(y_test, y_pred))
-
-      st.markdown("### Rapport déséquilibre (Imbalanced)")
-      st.text(classification_report_imbalanced(y_test, y_pred))
-
-      ## Création de la figure
-      fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-      # Matrice de confusion
-      cm = confusion_matrix(y_test, y_pred)
-      disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-      disp.plot(ax=axes[0], cmap="Blues", values_format="d", colorbar=False)
-      axes[0].set_title("Matrice de Confusion")
-
-      # Courbe ROC
-      fpr, tpr, _ = roc_curve(y_test, y_proba)
-      axes[1].plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}", color="darkorange")
-      axes[1].plot([0, 1], [0, 1], linestyle='--', color="gray")
-      axes[1].set_xlabel("Taux de faux positifs")
-      axes[1].set_ylabel("Taux de vrais positifs")
-      axes[1].set_title("Courbe ROC")
-      axes[1].legend()
-      axes[1].grid(True)
-
-      # Mise en page et affichage dans Streamlit
-      fig.suptitle(f"Évaluation du modèle : {model_name}", fontsize=14)
-      fig.text(
-          0.5, 0.88,
-          f"F1-score (classe positive) : {f1_positive:.3f}",
-          ha='center',
-          fontsize=12
-      )
-      plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-      st.pyplot(fig)
-
-   #-----Fin Fonction----------------------------------------------------------------------------------------------------------------------------------------------------------
+  # ----------------------------
+  #  4 Evaluation
+  # ----------------------------
   st.header("Prédictions puis évaluation")
+  
+  default_threshold = best_threshold if choix_preprocessing == "non-temporel" else 0.5
+  seuil = st.slider("🎯 Seuil de décision (classification)", 0.0, 1.0, step=0.01, value=default_threshold, key="seuil_slider")
+  
+  afficher_resultats(model, X, y, "Evaluation", seuil)
 
-  evaluation_streamlit(y_test_temporel, y_pred, y_proba, choix_model_non_temporel)
-
-  # 5 Interprétation--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# 9. Sur la page de présentation du Preprocessing
+
+# -----------------------------
+# Page 4 : Conclusions
+# -----------------------------
+
 if page == pages[3] :
   st.header("Conclusion")
