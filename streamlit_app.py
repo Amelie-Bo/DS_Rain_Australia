@@ -554,7 +554,7 @@ if page == "Comparaison des modèles":
 
         # Bar plot
         st.markdown("#### Importance globale des variables (bar plot)")
-        fig_bar, ax = plt.subplots()
+        fig_bar, ax = plt.subplots(figsize=(8, 4))
         shap.plots.bar(
             shap.Explanation(
                 values=shap_values,
@@ -569,7 +569,7 @@ if page == "Comparaison des modèles":
 
         # Summary plot
         st.markdown("#### Répartition des impacts (summary plot)")
-        fig_summary = plt.figure()
+        fig_summary = plt.figure(figsize=(8, 4))
         shap.summary_plot(shap_values, X_sample, plot_type="dot", show=False)
         st.pyplot(fig_summary)
 
@@ -758,7 +758,7 @@ if page == pages[2] :
   ## 2.4 Ajout du climat
   climat_mapping = df = pd.read_csv(os.path.join(SCALER_PATH, "climat_mapping.csv"))
   climat_mapping_series = climat_mapping.set_index("Location")["Climate"]
-  df_X_y_test['Climat'] = df_X_y_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
+  df_X_y_test['Climate'] = df_X_y_test["Location"].map(climat_mapping_series) #pour chaque valeur de df.Location, on récupère la valeur correspondante dans climat_mapping
 
   ## 2.5 Date, Saison
   df_X_y_test["Date"]=pd.to_datetime(df_X_y_test["Date"], format = "%Y-%m-%d")
@@ -792,7 +792,7 @@ if page == pages[2] :
   ##### df_X_y_test = df_X_y_test[(df_X_y_test["Date"] == date_selectionnee)]
   
   st.write("Données à prédire")
-  st.dataframe(df_X_y_test.head(6)) # df_X_y_test fait 2 lignes * nb de stations sélectionnées.
+  st.dataframe(df_X_y_test.head(6)) 
 
   #-3 Choix du modèle--------------------------------------------------------------------------------------------------------------------------------------------------------------
   st.header("Choix du preprocessing")
@@ -817,7 +817,7 @@ if page == pages[2] :
 
     # --- Chargement des scalers / modèles ---
     scalers = load_joblib("weather_scalers.joblib")
-    top_features = joblib.load(os.path.join(MODELS_PATH, "final_xgb_features_list.joblib"))
+    top_features = load_features()
     scaler_knn = load_joblib("scaler_knn.joblib")
     knn_model = load_joblib("knn_model.joblib")
 
@@ -973,13 +973,16 @@ if page == pages[2] :
       return X, y_true, dates, df
 
     # --- Application du preprocessing ---
-    X, y_true, dates, df = preprocessing_Florent(df_X_y_test)
-
+    X, y, _, _ = preprocessing_Florent(df_X_y_test)
+    
+    
     ### 3.1.B Modelisation Florent------------------------------------------------------------------------------------------------------------------------------------------------
     do_predict = st.checkbox("Lancer prédiction")
     if not do_predict:
         st.stop()
-    # Ton code pour prédire sur test
+    
+    model = choix_model_temporel
+
 
 
  #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -999,7 +1002,7 @@ if page == pages[2] :
         st.stop()
 
     #### 3.2.A.1 Suppresion des features avec trop de manquants
-    df_X_y_test = df_X_y_test.drop(["RainToday","Saison","Climat"], axis = 1)
+    df_X_y_test = df_X_y_test.drop(["RainToday","Saison","Climate"], axis = 1)
 
     #### 3.2.A.2 Complétions autorisées
     df_X_y_test["Pressure3pm"]=df_X_y_test["Pressure3pm"].fillna(df_X_y_test["Pressure9am"])
